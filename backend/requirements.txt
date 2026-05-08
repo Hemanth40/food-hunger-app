@@ -26,6 +26,10 @@ email-validator==2.2.0
 # Scheduler
 apscheduler==3.10.4
 
+# ML — pre-built wheels available for Python 3.11
+scikit-learn==1.6.1
+numpy==2.2.1
+
 # WebSocket
 websockets==14.1
 
