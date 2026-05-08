@@ -1,0 +1,55 @@
+# Render.com Deployment Configuration
+# Food Hunger App — Backend (FastAPI)
+# https://render.com/docs/render-yaml
+
+services:
+  - type: web
+    name: food-hunger-backend
+    env: python
+    region: singapore   # Closest to India
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+
+    envVars:
+      # Database — Render will inject DATABASE_URL automatically from the linked database
+      - key: DATABASE_URL
+        fromDatabase:
+          name: food-hunger-db
+          property: connectionString
+
+      - key: DATABASE_URL_SYNC
+        fromDatabase:
+          name: food-hunger-db
+          property: connectionString
+
+      # Security — Render auto-generates a secure random value
+      - key: JWT_SECRET_KEY
+        generateValue: true
+
+      # Redis — your Upstash URL (set in Render dashboard)
+      - key: REDIS_URL
+        sync: false   # Set manually in Render dashboard
+
+      # Fast2SMS — set manually in Render dashboard
+      - key: FAST2SMS_API_KEY
+        sync: false
+
+      # App Settings
+      - key: DEV_MODE
+        value: "false"
+      - key: DEBUG
+        value: "false"
+      - key: OTP_LENGTH
+        value: "6"
+      - key: OTP_EXPIRE_SECONDS
+        value: "300"
+      - key: ALLOWED_ORIGINS
+        value: "*"   # Allow all for mobile app
+
+databases:
+  - name: food-hunger-db
+    plan: free
+    region: singapore
