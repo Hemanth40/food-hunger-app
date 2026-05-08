@@ -27,14 +27,25 @@ from app.schemas.user import TokenResponse, UserLogin, UserRegister, UserRespons
 
 async def register_user(db: AsyncSession, data: UserRegister) -> dict:
     """Create account (inactive), send OTP for verification."""
-    existing = await db.execute(select(User).where(User.phone == data.phone))
-    if existing.scalar_one_or_none():
-        raise ValueError("Phone number already registered")
+    existing_result = await db.execute(select(User).where(User.phone == data.phone))
+    existing = existing_result.scalar_one_or_none()
+
+    if existing:
+        if existing.is_active:
+            raise ValueError("Phone number already registered")
+        else:
+            # Incomplete registration (OTP was never verified) — delete and retry
+            await db.delete(existing)
+            await db.flush()
 
     if data.email:
         existing_email = await db.execute(select(User).where(User.email == data.email))
-        if existing_email.scalar_one_or_none():
+        ex_email_user = existing_email.scalar_one_or_none()
+        if ex_email_user and ex_email_user.is_active:
             raise ValueError("Email already registered")
+        elif ex_email_user and not ex_email_user.is_active:
+            await db.delete(ex_email_user)
+            await db.flush()
 
     user = User(
         full_name=data.full_name,
@@ -45,7 +56,7 @@ async def register_user(db: AsyncSession, data: UserRegister) -> dict:
         latitude=data.latitude,
         longitude=data.longitude,
         address=data.address,
-        is_active=False,  # Stay inactive until OTP verified
+        is_active=False,  # Stays inactive until OTP verified
     )
     db.add(user)
     await db.flush()
@@ -62,9 +73,10 @@ async def register_user(db: AsyncSession, data: UserRegister) -> dict:
 
     return {
         "phone": user.phone,
-        "message": f"OTP sent to {user.phone[-4:]} — enter it to activate your account",
+        "message": f"OTP sent to +91 {user.phone[-4:]} — enter it to activate your account",
         "otp_hint": None if sms_sent else otp,  # Only show hint if SMS failed
     }
+
 
 
 async def login_user(db: AsyncSession, data: UserLogin) -> TokenResponse:
