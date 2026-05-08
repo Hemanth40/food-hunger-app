@@ -26,6 +26,11 @@ def _build_request_response(
     receiver: User,
     driver: Optional[User] = None,
 ) -> RequestResponse:
+    # In SQLAlchemy 2.x + PostgreSQL, outerjoin aliased entity may be a zombie object
+    # with id=None instead of Python None — check .id explicitly
+    driver_id = getattr(driver, "id", None)
+    driver_name = driver.full_name if (driver and driver_id) else None
+
     return RequestResponse(
         id=claim.id,
         donation_id=claim.donation_id,
@@ -41,7 +46,7 @@ def _build_request_response(
         completed_at=claim.completed_at,
         created_at=claim.created_at,
         assigned_driver_id=claim.assigned_driver_id,
-        assigned_driver_name=driver.full_name if driver else None,
+        assigned_driver_name=driver_name,
         delivery_mode=claim.delivery_mode,
         donor_name=donor.full_name if donor else None,
         donor_phone=donor.phone if donor else None,
