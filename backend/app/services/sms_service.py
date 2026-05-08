@@ -31,10 +31,11 @@ async def send_otp_sms(phone: str, otp: str) -> bool:
                     "Content-Type": "application/json",
                 },
                 json={
-                    "route": "otp",
-                    "variables_values": otp,
+                    "route": "q",
+                    "message": f"Your Food Hunger App OTP is {otp}. Valid for 5 minutes. Do not share.",
                     "numbers": clean_phone,
                     "flash": 0,
+                    "language": "english",
                 },
             )
             result = response.json()
