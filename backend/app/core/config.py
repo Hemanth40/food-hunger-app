@@ -34,7 +34,11 @@ class Settings(BaseSettings):
     OTP_LENGTH: int = 6
     DEV_MODE: bool = False
     DEV_OTP: str = "123456"
-    FAST2SMS_API_KEY: str = ""
+
+    # Twilio Verify
+    TWILIO_ACCOUNT_SID: str = ""
+    TWILIO_AUTH_TOKEN: str = ""
+    TWILIO_VERIFY_SERVICE_SID: str = ""
 
     HOST: str = "0.0.0.0"
     PORT: int = 8000

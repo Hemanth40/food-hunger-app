@@ -5,24 +5,20 @@ Auth service for registration, login, OTP, and token management.
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.redis import (
-    blacklist_token,
-    is_token_blacklisted,
-    store_otp,
-    verify_otp_from_store,
-)
+from app.core.config import settings
+from app.core.redis import is_token_blacklisted, store_refresh_token
 from app.core.security import (
     create_access_token,
     create_refresh_token,
     decode_token,
-    generate_otp,
     hash_password,
     verify_password,
 )
-from app.services.sms_service import send_otp_sms
+from app.models.donation import Donation
 from app.models.user import User, UserRole
 from app.models.volunteer import Volunteer
 from app.schemas.user import TokenResponse, UserLogin, UserRegister, UserResponse
+from app.services.sms_service import send_otp_sms, verify_otp_via_twilio
 
 
 async def register_user(db: AsyncSession, data: UserRegister) -> dict:
@@ -66,15 +62,13 @@ async def register_user(db: AsyncSession, data: UserRegister) -> dict:
 
     await db.flush()
 
-    # Generate OTP, store in Redis, send via SMS
-    otp = generate_otp()
-    await store_otp(user.phone, otp)
-    sms_sent = await send_otp_sms(user.phone, otp)
+    # Send OTP via Twilio Verify (Twilio generates the OTP itself)
+    sms_sent = await send_otp_sms(user.phone)
 
     return {
         "phone": user.phone,
         "message": f"OTP sent to +91 {user.phone[-4:]} — enter it to activate your account",
-        "otp_hint": None if sms_sent else otp,  # Only show hint if SMS failed
+        "otp_hint": None if sms_sent else "SMS_FAILED",
     }
 
 
@@ -101,8 +95,9 @@ async def login_user(db: AsyncSession, data: UserLogin) -> TokenResponse:
 
 
 async def verify_otp_and_login(db: AsyncSession, phone: str, otp: str) -> TokenResponse:
-    """Verify OTP during registration, activate account, return JWT."""
-    if not await verify_otp_from_store(phone, otp):
+    """Verify OTP via Twilio, activate account, return JWT."""
+    # Verify against Twilio's service (not local Redis)
+    if not await verify_otp_via_twilio(phone, otp):
         raise ValueError("Invalid or expired OTP")
 
     result = await db.execute(select(User).where(User.phone == phone))
