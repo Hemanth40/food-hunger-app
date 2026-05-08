@@ -1,15 +1,14 @@
 """
-Hunger Hotspot Predictor — DBSCAN clustering on donation/claim coordinates.
+Hunger Hotspot Predictor — Pure Python clustering on donation/claim coordinates.
 
-Uses haversine metric for geospatial clustering to identify
-repeated hunger demand zones and suggested food drive areas.
+Uses haversine distance for geospatial clustering to identify
+repeated hunger demand zones — no external ML libraries required.
 """
 
-import numpy as np
+import math
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Tuple
 
-from sklearn.cluster import DBSCAN
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,28 +18,82 @@ from app.models.critical_zone import CriticalZone
 from app.schemas.ml import HotspotCluster, HotspotResponse
 from app.core.config import settings
 
-
 EARTH_RADIUS_KM = 6371.0
 
 
-async def collect_coordinates(db: AsyncSession) -> np.ndarray:
+def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculate distance in km between two GPS coordinates."""
+    r = EARTH_RADIUS_KM
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
+
+
+def pure_python_dbscan(
+    coords: List[Tuple[float, float]],
+    eps_km: float,
+    min_samples: int,
+) -> List[int]:
     """
-    Collect all donation and claim coordinates for clustering.
-    Weight claimed/delivered donations more heavily by duplicating their coordinates.
+    Simple DBSCAN implementation in pure Python using haversine distance.
+    Returns a list of cluster labels (-1 = noise) for each point.
+    """
+    n = len(coords)
+    labels = [-1] * n
+    visited = [False] * n
+    cluster_id = 0
+
+    def get_neighbors(idx: int) -> List[int]:
+        return [
+            j for j in range(n)
+            if haversine_km(coords[idx][0], coords[idx][1], coords[j][0], coords[j][1]) <= eps_km
+        ]
+
+    for i in range(n):
+        if visited[i]:
+            continue
+        visited[i] = True
+        neighbors = get_neighbors(i)
+
+        if len(neighbors) < min_samples:
+            labels[i] = -1  # noise
+            continue
+
+        labels[i] = cluster_id
+        seed_set = set(neighbors) - {i}
+
+        while seed_set:
+            j = seed_set.pop()
+            if not visited[j]:
+                visited[j] = True
+                new_neighbors = get_neighbors(j)
+                if len(new_neighbors) >= min_samples:
+                    seed_set.update(new_neighbors)
+            if labels[j] == -1:
+                labels[j] = cluster_id
+
+        cluster_id += 1
+
+    return labels
+
+
+async def collect_coordinates(db: AsyncSession) -> List[Tuple[float, float]]:
+    """
+    Collect all donation and claim coordinates.
+    Weight claimed/delivered donations more heavily.
     """
     coords = []
 
-    # Get all donation coordinates
     result = await db.execute(select(Donation.latitude, Donation.longitude, Donation.status))
     for lat, lon, status in result.all():
         if lat is not None and lon is not None:
-            coords.append([lat, lon])
-            # Weight delivered donations (higher demand signal)
+            coords.append((lat, lon))
             if status in (DonationStatus.CLAIMED, DonationStatus.DELIVERED):
-                coords.append([lat, lon])
-                coords.append([lat, lon])
+                coords.append((lat, lon))
+                coords.append((lat, lon))
 
-    # Get claim coordinates (receiver locations from donation_requests)
     result = await db.execute(
         select(Donation.latitude, Donation.longitude)
         .join(DonationRequest, DonationRequest.donation_id == Donation.id)
@@ -48,85 +101,59 @@ async def collect_coordinates(db: AsyncSession) -> np.ndarray:
     )
     for lat, lon in result.all():
         if lat is not None and lon is not None:
-            coords.append([lat, lon])
+            coords.append((lat, lon))
 
-    return np.array(coords) if coords else np.array([]).reshape(0, 2)
+    return coords
 
 
 def run_dbscan_clustering(
-    coordinates: np.ndarray,
+    coordinates: List[Tuple[float, float]],
     radius_km: float = None,
     min_samples: int = None,
 ) -> List[HotspotCluster]:
-    """
-    Run DBSCAN clustering with haversine metric.
-    Returns list of cluster centroids with demand scores.
-    """
+    """Run pure-Python DBSCAN and return cluster summaries."""
     if len(coordinates) < 2:
         return []
 
     radius_km = radius_km or settings.ML_CLUSTER_RADIUS_KM
     min_samples = min_samples or settings.ML_MIN_SAMPLES
 
-    # Convert to radians for haversine metric
-    coords_radians = np.radians(coordinates)
+    labels = pure_python_dbscan(coordinates, eps_km=radius_km, min_samples=min_samples)
 
-    # eps in radians = km / Earth radius
-    epsilon = radius_km / EARTH_RADIUS_KM
-
-    # Run DBSCAN
-    db = DBSCAN(
-        eps=epsilon,
-        min_samples=min_samples,
-        metric="haversine",
-        algorithm="ball_tree",
-    )
-    labels = db.fit_predict(coords_radians)
-
-    # Process clusters (ignore noise labeled as -1)
     clusters = []
-    unique_labels = set(labels)
-    unique_labels.discard(-1)
+    unique_labels = set(l for l in labels if l != -1)
 
     for label in unique_labels:
-        mask = labels == label
-        cluster_points = coordinates[mask]
+        cluster_points = [coordinates[i] for i, l in enumerate(labels) if l == label]
+        n = len(cluster_points)
 
-        centroid_lat = float(np.mean(cluster_points[:, 0]))
-        centroid_lon = float(np.mean(cluster_points[:, 1]))
-        point_count = int(np.sum(mask))
+        centroid_lat = sum(p[0] for p in cluster_points) / n
+        centroid_lon = sum(p[1] for p in cluster_points) / n
+        demand_score = round(n * (1.0 / max(radius_km, 0.1)), 2)
 
-        # Demand score: combination of point density and cluster size
-        demand_score = round(point_count * (1.0 / max(radius_km, 0.1)), 2)
-
-        # Calculate actual cluster radius
-        if len(cluster_points) > 1:
-            distances_from_centroid = np.sqrt(
-                (cluster_points[:, 0] - centroid_lat) ** 2 +
-                (cluster_points[:, 1] - centroid_lon) ** 2
-            ) * 111.0  # rough km conversion
-            actual_radius = float(np.max(distances_from_centroid))
+        if n > 1:
+            distances = [
+                haversine_km(p[0], p[1], centroid_lat, centroid_lon)
+                for p in cluster_points
+            ]
+            actual_radius = round(max(distances), 2)
         else:
             actual_radius = 0.0
 
         clusters.append(HotspotCluster(
-            cluster_id=int(label),
+            cluster_id=label,
             latitude=centroid_lat,
             longitude=centroid_lon,
             demand_score=demand_score,
-            point_count=point_count,
-            radius_km=round(actual_radius, 2),
+            point_count=n,
+            radius_km=actual_radius,
         ))
 
-    # Sort by demand score desc
     clusters.sort(key=lambda c: c.demand_score, reverse=True)
     return clusters
 
 
 async def predict_hunger_hotspots(db: AsyncSession) -> HotspotResponse:
-    """
-    Main entry point: collect data, run DBSCAN, return response.
-    """
     coordinates = await collect_coordinates(db)
     clusters = run_dbscan_clustering(coordinates)
 
@@ -139,13 +166,10 @@ async def predict_hunger_hotspots(db: AsyncSession) -> HotspotResponse:
 
 
 async def persist_hotspots(db: AsyncSession, clusters: List[HotspotCluster]):
-    """Save clusters to critical_zones table, replacing old data."""
-    # Clear old zones
     result = await db.execute(select(CriticalZone))
     for zone in result.scalars().all():
         await db.delete(zone)
 
-    # Insert new zones
     for cluster in clusters:
         zone = CriticalZone(
             cluster_latitude=cluster.latitude,
@@ -160,7 +184,6 @@ async def persist_hotspots(db: AsyncSession, clusters: List[HotspotCluster]):
 
 
 async def run_and_persist(db: AsyncSession) -> HotspotResponse:
-    """Run ML prediction and persist results."""
     response = await predict_hunger_hotspots(db)
     await persist_hotspots(db, response.clusters)
     return response
