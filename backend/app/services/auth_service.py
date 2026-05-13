@@ -61,13 +61,17 @@ async def register_user(db: AsyncSession, data: UserRegister) -> dict:
 
     await db.flush()
 
-    # Send OTP via Twilio Verify (Twilio generates the OTP itself)
-    sms_sent = await send_otp_sms(user.phone)
+    # DEV MODE: skip Twilio entirely — OTP is always DEV_OTP (123456)
+    if settings.DEV_MODE:
+        print(f"[SMS] DEV_MODE: OTP skipped. Use '{settings.DEV_OTP}' to verify.")
+        sms_sent = True
+    else:
+        sms_sent = await send_otp_sms(user.phone)
 
     return {
         "phone": user.phone,
         "message": f"OTP sent to +91 {user.phone[-4:]} — enter it to activate your account",
-        "otp_hint": None if sms_sent else "SMS_FAILED",
+        "otp_hint": settings.DEV_OTP if settings.DEV_MODE else (None if sms_sent else "SMS_FAILED"),
     }
 
 
@@ -94,9 +98,12 @@ async def login_user(db: AsyncSession, data: UserLogin) -> TokenResponse:
 
 
 async def verify_otp_and_login(db: AsyncSession, phone: str, otp: str) -> TokenResponse:
-    """Verify OTP via Twilio, activate account, return JWT."""
-    # Verify against Twilio's service (not local Redis)
-    if not await verify_otp_via_twilio(phone, otp):
+    """Verify OTP via Twilio (or DEV_MODE fixed code), activate account, return JWT."""
+    if settings.DEV_MODE:
+        # In dev mode accept the fixed DEV_OTP value only
+        if otp != settings.DEV_OTP:
+            raise ValueError(f"Invalid OTP. Dev mode: use '{settings.DEV_OTP}'")
+    elif not await verify_otp_via_twilio(phone, otp):
         raise ValueError("Invalid or expired OTP")
 
     result = await db.execute(select(User).where(User.phone == phone))
