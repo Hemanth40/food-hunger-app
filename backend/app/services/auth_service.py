@@ -5,6 +5,7 @@ Auth service for registration, login, OTP, and token management.
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.redis import blacklist_token, is_token_blacklisted
 from app.core.security import (
     create_access_token,
