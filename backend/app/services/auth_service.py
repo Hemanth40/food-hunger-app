@@ -62,19 +62,18 @@ async def register_user(db: AsyncSession, data: UserRegister) -> dict:
 
     await db.flush()
 
-    # DEV MODE: skip Twilio entirely — OTP is always DEV_OTP (123456)
-    if settings.DEV_MODE:
-        print(f"[SMS] DEV_MODE: OTP skipped. Use '{settings.DEV_OTP}' to verify.")
-        sms_sent = True
+    # Firebase handles OTP client-side — no backend SMS needed
+    if settings.USE_FIREBASE_AUTH or settings.DEV_MODE:
+        mode = 'DEV' if settings.DEV_MODE else 'Firebase'
+        print(f"[Auth] {mode} mode: backend skips OTP send, client handles it.")
     else:
-        sms_sent = await send_otp_sms(user.phone)
+        await send_otp_sms(user.phone)
 
     return {
         "phone": user.phone,
-        "message": f"OTP sent to +91 {user.phone[-4:]} — enter it to activate your account",
-        "otp_hint": settings.DEV_OTP if settings.DEV_MODE else (None if sms_sent else "SMS_FAILED"),
+        "message": "OTP sent to your phone — enter it to activate your account",
+        "otp_hint": settings.DEV_OTP if settings.DEV_MODE else None,
     }
-
 
 
 async def login_user(db: AsyncSession, data: UserLogin) -> TokenResponse:
@@ -98,14 +97,21 @@ async def login_user(db: AsyncSession, data: UserLogin) -> TokenResponse:
     )
 
 
-async def verify_otp_and_login(db: AsyncSession, phone: str, otp: str) -> TokenResponse:
-    """Verify OTP via Twilio (or DEV_MODE fixed code), activate account, return JWT."""
+async def verify_otp_and_login(db: AsyncSession, phone: str, firebase_id_token: str) -> TokenResponse:
+    """Verify Firebase Phone Auth token (or DEV_OTP), activate account, return JWT."""
     if settings.DEV_MODE:
-        # In dev mode accept the fixed DEV_OTP value only
-        if otp != settings.DEV_OTP:
+        # Dev mode: firebase_id_token is treated as the raw OTP code
+        if firebase_id_token != settings.DEV_OTP:
             raise ValueError(f"Invalid OTP. Dev mode: use '{settings.DEV_OTP}'")
-    elif not await verify_otp_via_twilio(phone, otp):
-        raise ValueError("Invalid or expired OTP")
+    else:
+        # Firebase mode: verify the ID token from Firebase Phone Auth
+        from app.services.firebase_service import verify_firebase_id_token
+        decoded = verify_firebase_id_token(firebase_id_token)
+        # Firebase returns E.164 phone_number: +91XXXXXXXXXX
+        token_phone = decoded.get("phone_number", "")
+        # Compare last 10 digits to be format-agnostic
+        if not token_phone or phone.strip()[-10:] != token_phone[-10:]:
+            raise ValueError("Phone number does not match Firebase token")
 
     result = await db.execute(select(User).where(User.phone == phone))
     user = result.scalar_one_or_none()

@@ -70,9 +70,12 @@ export function AuthProvider({ children }) {
     return nextUser;
   };
 
-  const verifyOTP = async (phone, otp) => {
-    // Used during REGISTRATION only to verify phone number
-    const response = await client.post('/auth/verify-otp', { phone, otp });
+  const verifyOTP = async (phone, firebaseIdToken) => {
+    // firebaseIdToken: Firebase Phone Auth ID token (or DEV_OTP in dev mode)
+    const response = await client.post('/auth/verify-otp', {
+      phone,
+      firebase_id_token: firebaseIdToken,
+    });
     const { access_token, refresh_token, user: nextUser } = response.data;
     await secureSet('access_token', access_token);
     await secureSet('refresh_token', refresh_token);

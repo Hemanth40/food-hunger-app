@@ -29,7 +29,7 @@ class OTPRequest(BaseModel):
 
 class OTPVerify(BaseModel):
     phone: str = Field(..., min_length=10, max_length=20)
-    otp: str = Field(..., min_length=4, max_length=8)
+    firebase_id_token: str  # Firebase Phone Auth ID token (or DEV_OTP in dev mode)
 
 
 class TokenResponse(BaseModel):

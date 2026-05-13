@@ -33,7 +33,9 @@ async def login(login_data: UserLogin, db: AsyncSession = Depends(get_db)):
 @router.post("/verify-otp", response_model=TokenResponse)
 async def verify_otp(otp_data: OTPVerify, db: AsyncSession = Depends(get_db)):
     try:
-        return await auth_service.verify_otp_and_login(db, otp_data.phone, otp_data.otp)
+        return await auth_service.verify_otp_and_login(
+            db, otp_data.phone, otp_data.firebase_id_token
+        )
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
 
