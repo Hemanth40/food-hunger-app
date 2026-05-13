@@ -1,19 +1,16 @@
-import React, { useContext, useRef, useState } from 'react';
+import React, { useContext, useState } from 'react';
 import {
   View, Text, TouchableOpacity,
   KeyboardAvoidingView, Platform, ScrollView, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from '@expo/vector-icons/MaterialCommunityIcons';
-import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
-import { PhoneAuthProvider, signInWithCredential } from 'firebase/auth';
 
 import { AuthContext } from '../../context/AuthContext';
 import Field from '../../components/Field';
 import LocationPickerModal from '../../components/LocationPickerModal';
 import { C, F, R } from '../../theme';
 import { extractError } from '../../utils/errorUtils';
-import { firebaseApp, firebaseAuth, firebaseConfig } from '../../services/firebase';
 
 const ROLES = [
   { value: 'user',      icon: 'food-fork-drink',  label: 'Donor',     color: C.brand },
@@ -23,23 +20,20 @@ const ROLES = [
 
 export default function RegisterScreen({ navigation }) {
   const { register, verifyOTP } = useContext(AuthContext);
-  const recaptchaVerifier = useRef(null);
 
-  const [step, setStep]               = useState('form');
-  const [phone, setPhone]             = useState('');
-  const [fullName, setFullName]       = useState('');
-  const [password, setPassword]       = useState('');
-  const [role, setRole]               = useState('user');
-  const [otp, setOtp]                 = useState('');
-  const [verificationId, setVerificationId] = useState(null);
-  const [loading, setLoading]         = useState(false);
-  const [error, setError]             = useState('');
-  const [showMap, setShowMap]         = useState(false);
+  const [step, setStep]         = useState('form');
+  const [phone, setPhone]       = useState('');
+  const [fullName, setFullName] = useState('');
+  const [password, setPassword] = useState('');
+  const [role, setRole]         = useState('user');
+  const [otp, setOtp]           = useState('');
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState('');
+  const [showMap, setShowMap]   = useState(false);
   const [selectedLocation, setSelectedLocation] = useState(null);
-  const [address, setAddress]         = useState('');
-  const [showPwd, setShowPwd]         = useState(false);
+  const [address, setAddress]   = useState('');
+  const [showPwd, setShowPwd]   = useState(false);
 
-  // Step 1: register on backend → Firebase sends OTP
   const submit = async () => {
     try {
       setLoading(true); setError('');
@@ -49,40 +43,24 @@ export default function RegisterScreen({ navigation }) {
         longitude: selectedLocation?.longitude,
         address: address || undefined,
       });
-      // Send OTP via Firebase
-      const formatted = phone.trim().startsWith('+') ? phone.trim() : `+91${phone.trim()}`;
-      const provider = new PhoneAuthProvider(firebaseAuth);
-      const vid = await provider.verifyPhoneNumber(formatted, recaptchaVerifier.current);
-      setVerificationId(vid);
       setStep('otp');
     } catch (err) {
-      const msg = err?.code
-        ? `Firebase error: ${err.code}`
-        : extractError(err, 'Could not send OTP');
-      setError(msg);
+      setError(extractError(err, 'Could not create account'));
     } finally { setLoading(false); }
   };
 
-  // Step 2: Firebase verifies OTP → get ID token → backend activates account
   const verifyRegistrationOtp = async () => {
     try {
       setLoading(true); setError('');
-      const credential = PhoneAuthProvider.credential(verificationId, otp);
-      const { user: fbUser } = await signInWithCredential(firebaseAuth, credential);
-      const idToken = await fbUser.getIdToken();
-      await verifyOTP(phone.trim(), idToken);
+      await verifyOTP(phone.trim(), otp.trim());
     } catch (err) {
-      const msg = err?.code === 'auth/invalid-verification-code'
-        ? 'Wrong OTP code. Please try again.'
-        : extractError(err, 'Verification failed');
-      setError(msg);
+      setError(extractError(err, 'Invalid OTP'));
     } finally { setLoading(false); }
   };
 
   const needsLocation = role === 'ngo' || role === 'restaurant';
   const canSubmit = fullName && phone.trim().length >= 10 && password.length >= 6;
 
-  // ─── OTP STEP ─────────────────────────────────────────────────────────────
   if (step === 'otp') {
     return (
       <SafeAreaView style={styles.safe}>
@@ -97,31 +75,34 @@ export default function RegisterScreen({ navigation }) {
               </View>
               <Text style={styles.title}>Verify your phone</Text>
               <Text style={[styles.subtitle, { textAlign: 'center', marginTop: 8 }]}>
-                {'Enter the 6-digit code sent to\n+91 ' + phone.trim().slice(-10)}
+                {'Enter the verification code for\n+91 ' + phone.trim().slice(-10)}
               </Text>
             </View>
-            <Field
-              label="OTP Code" icon="numeric"
-              placeholder="Enter 6-digit code"
+
+            <View style={styles.devBanner}>
+              <Icon name="shield-check-outline" size={16} color="#1D4ED8" />
+              <Text style={styles.devText}>
+                Enter <Text style={{ fontWeight: '900' }}>123456</Text> to verify your account
+              </Text>
+            </View>
+
+            <Field label="OTP Code" icon="numeric"
+              placeholder="Enter verification code"
               keyboardType="number-pad"
-              value={otp} onChangeText={setOtp} maxLength={6}
-            />
+              value={otp} onChangeText={setOtp} maxLength={6} />
+
             {error ? (
               <View style={styles.errorBox}>
                 <Icon name="alert-circle-outline" size={16} color={C.brand} />
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             ) : null}
+
             <TouchableOpacity
-              style={[styles.btnPrimary, (otp.length < 6 || loading) && { opacity: 0.5 }]}
+              style={[styles.btnPrimary, (otp.length < 4 || loading) && { opacity: 0.5 }]}
               onPress={verifyRegistrationOtp}
-              disabled={otp.length < 6 || loading}
-              activeOpacity={0.8}
-            >
+              disabled={otp.length < 4 || loading} activeOpacity={0.8}>
               {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Verify & Create Account</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.linkRow} onPress={() => setStep('form')}>
-              <Text style={styles.linkText}>Didn't receive? <Text style={{ color: C.brand, fontWeight: '700' }}>Go back & resend</Text></Text>
             </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -129,14 +110,8 @@ export default function RegisterScreen({ navigation }) {
     );
   }
 
-  // ─── REGISTRATION FORM ────────────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.safe}>
-      <FirebaseRecaptchaVerifierModal
-        ref={recaptchaVerifier}
-        firebaseConfig={firebaseConfig}
-        attemptInvisibleVerification={true}
-      />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()}>
@@ -184,7 +159,7 @@ export default function RegisterScreen({ navigation }) {
               <Icon name={selectedLocation ? 'check-circle' : 'map-marker-outline'} size={22}
                 color={selectedLocation ? C.green : C.grey2} />
               <Text style={[styles.mapText, selectedLocation && { color: C.green }]}>
-                {selectedLocation ? 'Location pinned ✓' : 'Pin your location on map (optional)'}
+                {selectedLocation ? 'Location pinned ✓' : 'Pin your location (optional)'}
               </Text>
               <Icon name="chevron-right" size={18} color={C.grey3} />
             </TouchableOpacity>
@@ -200,11 +175,13 @@ export default function RegisterScreen({ navigation }) {
           <TouchableOpacity
             style={[styles.btnPrimary, (!canSubmit || loading) && { opacity: 0.5 }]}
             onPress={submit} disabled={!canSubmit || loading} activeOpacity={0.8}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Send OTP</Text>}
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Create Account</Text>}
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.linkRow} onPress={() => navigation.navigate('Login')}>
-            <Text style={styles.linkText}>Already have an account? <Text style={{ color: C.brand, fontWeight: '700' }}>Log in</Text></Text>
+            <Text style={styles.linkText}>
+              Already have an account? <Text style={{ color: C.brand, fontWeight: '700' }}>Log in</Text>
+            </Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -231,6 +208,8 @@ const styles = StyleSheet.create({
   mapRowDone: { borderColor: C.green, backgroundColor: C.greenBg },
   mapText: { flex: 1, fontSize: F.sm, color: C.grey2, fontWeight: '500' },
   otpIcon: { width: 72, height: 72, borderRadius: 36, backgroundColor: C.brand + '18', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  devBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#EFF6FF', padding: 12, borderRadius: R.md, marginBottom: 16, borderWidth: 1, borderColor: '#BFDBFE' },
+  devText: { fontSize: F.sm, color: '#1D4ED8', flex: 1 },
   errorBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFF0F1', padding: 12, borderRadius: R.md, marginBottom: 16 },
   errorText: { fontSize: F.sm, color: C.brand, flex: 1 },
   btnPrimary: { height: 52, backgroundColor: C.brand, borderRadius: R.md, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
