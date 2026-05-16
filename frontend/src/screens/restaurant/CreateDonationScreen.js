@@ -111,6 +111,16 @@ export default function CreateDonationScreen({ navigation }) {
         image_base64: imageBase64,
         image_mime_type: 'image/jpeg',
       });
+      
+      // Clear form so previous details don't persist
+      setFoodType('');
+      setQuantity('');
+      setDescription('');
+      setImageBase64(null);
+      setImageUri(null);
+      setPickupAddress('');
+      setLocation(null);
+      
       navigation.goBack();
     } catch (err) {
       setError(extractError(err, 'Could not post donation'));
