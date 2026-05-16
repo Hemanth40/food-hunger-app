@@ -129,7 +129,8 @@ export default function DriverMarketplaceScreen() {
             pickupLabel={item.donor_name || 'Pickup'}
             dropoffLabel={item.receiver_name || 'NGO hub'}
           />
-        ))
+          );
+        })
       ) : (
         <GlassCard style={styles.emptyCard}>
           <Text style={styles.emptyTitle}>No active route yet</Text>
