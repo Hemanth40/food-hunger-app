@@ -13,6 +13,7 @@ from app.models.donation import Donation, DonationStatus
 from app.models.donation_request import DonationRequest, RequestStatus
 from app.models.user import User
 from app.schemas.donation_request import RequestResponse
+from app.core.websocket import manager
 
 
 def _status_text(value) -> str:
@@ -139,7 +140,19 @@ async def update_claim_status(
     is_receiver = claim.receiver_id == user_id
     is_driver = claim.assigned_driver_id == user_id
 
-    if target_status == RequestStatus.PICKED_UP:
+    if target_status == RequestStatus.DRIVER_REACHED:
+        if claim.delivery_mode == "driver" and not is_driver:
+            raise ValueError("Only the assigned driver can update this status")
+        claim.status = RequestStatus.DRIVER_REACHED
+        
+        # Notify donor and receiver via websocket
+        try:
+            await manager.send_personal_json({"type": "STATUS_UPDATE", "status": "driver_reached", "request_id": request_id}, donation.donor_id)
+            await manager.send_personal_json({"type": "STATUS_UPDATE", "status": "driver_reached", "request_id": request_id}, claim.receiver_id)
+        except Exception:
+            pass
+
+    elif target_status == RequestStatus.PICKED_UP:
         if claim.delivery_mode == "self" and not is_donor:
             raise ValueError("Only the donor can start this self-delivery")
         if claim.delivery_mode == "driver" and not is_driver:

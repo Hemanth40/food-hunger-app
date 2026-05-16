@@ -12,7 +12,7 @@ console.log('[API] baseURL =', baseURL);
 
 const client = axios.create({
   baseURL,
-  timeout: 15000, // 15s timeout (Render free tier can be slow on cold start)
+  timeout: 60000, // 60s timeout to allow Render free tier to wake up (cold start)
   headers: {
     'Content-Type': 'application/json',
   },

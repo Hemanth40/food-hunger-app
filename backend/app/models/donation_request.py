@@ -14,6 +14,7 @@ from app.core.database import Base
 class RequestStatus(str, enum.Enum):
     PENDING = "pending"
     APPROVED = "approved"
+    DRIVER_REACHED = "driver_reached"
     PICKED_UP = "picked_up"
     DELIVERED = "delivered"
     CANCELLED = "cancelled"

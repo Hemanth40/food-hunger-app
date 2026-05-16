@@ -71,6 +71,15 @@ async def init_db():
 
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(apply_dev_schema_patches)
+        
+    # Safe ALTER TYPE outside transaction block for PostgreSQL
+    if "postgres" in str(engine.url):
+        try:
+            async with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+                await conn.execute(text("ALTER TYPE requeststatus ADD VALUE IF NOT EXISTS 'driver_reached'"))
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Could not alter enum requeststatus: {e}")
 
 
 async def close_db():

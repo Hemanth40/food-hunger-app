@@ -9,8 +9,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import client from '../../api/client';
 import { C, F, R, shadow } from '../../theme';
 
-const STATUS_COLOR  = { pending:'#F59E0B', approved:'#2563EB', picked_up:'#8B5CF6', delivered:C.green, cancelled:C.grey3 };
-const STATUS_ICON   = { pending:'clock-outline', approved:'check', picked_up:'package-up', delivered:'check-circle', cancelled:'close-circle' };
+const STATUS_COLOR  = { pending:'#F59E0B', approved:'#2563EB', driver_reached:'#F59E0B', picked_up:'#8B5CF6', delivered:C.green, cancelled:C.grey3 };
+const STATUS_ICON   = { pending:'clock-outline', approved:'check', driver_reached:'truck-fast-outline', picked_up:'package-up', delivered:'check-circle', cancelled:'close-circle' };
 
 export default function ClaimDonationScreen() {
   const [claims, setClaims]     = useState([]);
@@ -21,7 +21,11 @@ export default function ClaimDonationScreen() {
     setClaims(res.data);
   };
 
-  useFocusEffect(useCallback(() => { loadData().catch(() => {}); }, []));
+  useFocusEffect(useCallback(() => {
+    loadData().catch(() => {});
+    const interval = setInterval(() => { loadData().catch(() => {}); }, 10000);
+    return () => clearInterval(interval);
+  }, []));
   const onRefresh = async () => { setRefreshing(true); await loadData().catch(() => {}); setRefreshing(false); };
 
   const confirmDelivered = async (id) => {

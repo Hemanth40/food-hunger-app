@@ -46,24 +46,24 @@ export default function DeliveryRouteMap({
       {/* Route steps */}
       <View style={styles.routeWrap}>
         {/* Pickup */}
-        <View style={styles.step}>
-          <View style={styles.stepLeft}>
-            <View style={[styles.dot, { backgroundColor: C.green }]} />
-            {hasDropoff && <View style={styles.line} />}
-          </View>
-          <View style={styles.stepBody}>
-            <Text style={styles.stepLabel}>PICKUP</Text>
-            <Text style={styles.stepAddr} numberOfLines={2}>
-              {pickupAddress || (hasPickup ? `${pickupCoord.latitude.toFixed(5)}, ${pickupCoord.longitude.toFixed(5)}` : 'Address not set')}
-            </Text>
-            {hasPickup && (
+        {hasPickup && (
+          <View style={styles.step}>
+            <View style={styles.stepLeft}>
+              <View style={[styles.dot, { backgroundColor: C.green }]} />
+              {hasDropoff && <View style={styles.line} />}
+            </View>
+            <View style={styles.stepBody}>
+              <Text style={styles.stepLabel}>PICKUP</Text>
+              <Text style={styles.stepAddr} numberOfLines={2}>
+                {pickupAddress || `${pickupCoord.latitude.toFixed(5)}, ${pickupCoord.longitude.toFixed(5)}`}
+              </Text>
               <TouchableOpacity style={styles.miniBtn} onPress={openPickup}>
                 <Icon name="map-marker-outline" size={12} color="#2563EB" />
                 <Text style={styles.miniBtnText}>View on map</Text>
               </TouchableOpacity>
-            )}
+            </View>
           </View>
-        </View>
+        )}
 
         {/* Dropoff */}
         {hasDropoff && (

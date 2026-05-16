@@ -13,13 +13,15 @@ import { AuthContext } from '../../context/AuthContext';
 import { useAppLayout } from '../../utils/layout';
 
 function activeAction(item) {
-  if (item.status === 'approved') return 'Start pickup';
+  if (item.status === 'approved') return 'Reached Restaurant';
+  if (item.status === 'driver_reached') return 'Confirm Picked Up';
   if (item.status === 'picked_up') return 'Mark delivered';
   return null;
 }
 
 function nextStatus(item) {
-  if (item.status === 'approved') return 'picked_up';
+  if (item.status === 'approved') return 'driver_reached';
+  if (item.status === 'driver_reached') return 'picked_up';
   if (item.status === 'picked_up') return 'delivered';
   return null;
 }
@@ -46,6 +48,10 @@ export default function DriverMarketplaceScreen() {
   useFocusEffect(
     useCallback(() => {
       loadData().catch(() => {});
+      const interval = setInterval(() => {
+        loadData().catch(() => {});
+      }, 10000); // 10s auto-polling
+      return () => clearInterval(interval);
     }, [])
   );
 
@@ -86,17 +92,33 @@ export default function DriverMarketplaceScreen() {
       </View>
 
       {myJobs.length ? (
-        myJobs.map((item) => (
-          <DeliveryRouteMap
-            key={item.id}
-            pickup={{
+        myJobs.map((item) => {
+          // Dynamic map logic based on status
+          let mapPickup, mapDropoff;
+          if (item.status === 'approved') {
+            // Volunteer -> Restaurant (For now, we just point to the Restaurant)
+            mapPickup = null; // Can be volunteer's location if available
+            mapDropoff = {
               latitude: item.donation_latitude,
               longitude: item.donation_longitude,
-            }}
-            dropoff={{
+            };
+          } else {
+            // Restaurant -> NGO
+            mapPickup = {
+              latitude: item.donation_latitude,
+              longitude: item.donation_longitude,
+            };
+            mapDropoff = {
               latitude: item.receiver_latitude,
               longitude: item.receiver_longitude,
-            }}
+            };
+          }
+
+          return (
+          <DeliveryRouteMap
+            key={item.id}
+            pickup={mapPickup}
+            dropoff={mapDropoff}
             title={item.donation_food_type}
             subtitle={`${item.donor_name} to ${item.receiver_name}`}
             statusTone={item.status}

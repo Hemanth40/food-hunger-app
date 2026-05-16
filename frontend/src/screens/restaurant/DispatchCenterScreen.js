@@ -9,7 +9,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import client from '../../api/client';
 import { C, F, R, shadow } from '../../theme';
 
-const STATUS_COLOR = { approved:'#2563EB', picked_up:'#8B5CF6', delivered:C.green };
+const STATUS_COLOR = { approved:'#2563EB', driver_reached:'#F59E0B', picked_up:'#8B5CF6', delivered:C.green };
 
 export default function DispatchCenterScreen({ navigation }) {
   const [dispatches, setDispatches] = useState([]);
@@ -20,7 +20,11 @@ export default function DispatchCenterScreen({ navigation }) {
     setDispatches(res.data);
   };
 
-  useFocusEffect(useCallback(() => { loadData().catch(() => {}); }, []));
+  useFocusEffect(useCallback(() => {
+    loadData().catch(() => {});
+    const interval = setInterval(() => { loadData().catch(() => {}); }, 10000);
+    return () => clearInterval(interval);
+  }, []));
   const onRefresh = async () => { setRefreshing(true); await loadData().catch(() => {}); setRefreshing(false); };
 
   const selfDeliver = async (id) => {
@@ -64,7 +68,8 @@ export default function DispatchCenterScreen({ navigation }) {
             : item.delivery_mode === 'driver' ? 'Waiting for driver'
             : 'Flexible';
 
-          const nextLabel = item.status === 'approved' ? 'Mark Picked Up'
+          const nextLabel = item.status === 'approved' ? 'Mark Reached'
+            : item.status === 'driver_reached' ? 'Mark Picked Up'
             : item.status === 'picked_up' ? 'Mark Delivered'
             : null;
 
