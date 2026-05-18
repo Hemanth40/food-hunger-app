@@ -192,7 +192,7 @@ export default function LiveTrackerScreen({ route, navigation }) {
             map.fitBounds([p1, p2], { paddingTopLeft: [20, 100], paddingBottomRight: [20, 250], maxZoom: 15 });
 
             // Fetch real street-routing from free OSRM API
-            var osrmUrl = 'https://router.project-osrm.org/route/v1/driving/' + safeOrigin.longitude + ',' + safeOrigin.latitude + ';' + safeDest.longitude + ',' + safeDest.latitude + '?overview=full&geometries=geojson';
+            var osrmUrl = 'https://router.project-osrm.org/route/v1/driving/${safeOrigin.longitude},${safeOrigin.latitude};${safeDest.longitude},${safeDest.latitude}?overview=full&geometries=geojson';
             
             fetch(osrmUrl)
               .then(res => res.json())
