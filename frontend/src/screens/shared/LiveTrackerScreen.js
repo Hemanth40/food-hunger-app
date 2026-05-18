@@ -187,12 +187,12 @@ export default function LiveTrackerScreen({ route, navigation }) {
           var p1 = [${safeOrigin.latitude}, ${safeOrigin.longitude}];
           var p2 = [${safeDest.latitude}, ${safeDest.longitude}];
 
-          if (userRole === 'volunteer') {
-            // --- VOLUNTEER VIEW: Show full route & navigation ---
+          if (userRole === 'volunteer' || isSelfDelivery) {
+            // --- VOLUNTEER & SELF-DELIVERY VIEW: Show full route & navigation ---
             map.fitBounds([p1, p2], { paddingTopLeft: [20, 100], paddingBottomRight: [20, 250], maxZoom: 15 });
 
             // Fetch real street-routing from free OSRM API
-            var osrmUrl = 'https://router.project-osrm.org/route/v1/driving/${safeOrigin.longitude},${safeOrigin.latitude};${safeDest.longitude},${safeDest.latitude}?overview=full&geometries=geojson';
+            var osrmUrl = 'https://router.project-osrm.org/route/v1/driving/' + safeOrigin.longitude + ',' + safeOrigin.latitude + ';' + safeDest.longitude + ',' + safeDest.latitude + '?overview=full&geometries=geojson';
             
             fetch(osrmUrl)
               .then(res => res.json())
@@ -204,8 +204,8 @@ export default function LiveTrackerScreen({ route, navigation }) {
                    L.polyline(latLngs, { color: '#111', weight: 8, opacity: 0.6, lineCap: 'round', lineJoin: 'round' }).addTo(map);
                    L.polyline(latLngs, { color: '#CCFF00', weight: 4, opacity: 1, lineCap: 'round', lineJoin: 'round' }).addTo(map);
 
-                   // Mock Driver Marker for Volunteer (always at p1)
-                   if (hasDriver && status !== 'pending') {
+                   // Mock Driver Marker (always at p1)
+                   if ((hasDriver || isSelfDelivery) && status !== 'pending') {
                       var driverHtml = '<div style="background-color: #fff; width: 32px; height: 32px; border-radius: 16px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 15px rgba(204, 255, 0, 0.6); font-size: 16px; border: 2px solid #000;">🛵</div>';
                       var driverIcon = L.divIcon({ className: '', html: driverHtml, iconSize: [32, 32], iconAnchor: [16, 16] });
                       L.marker(p1, { icon: driverIcon, zIndexOffset: 1000 }).addTo(map);
