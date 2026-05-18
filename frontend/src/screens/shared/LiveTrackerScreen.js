@@ -187,77 +187,51 @@ export default function LiveTrackerScreen({ route, navigation }) {
           var p1 = [${safeOrigin.latitude}, ${safeOrigin.longitude}];
           var p2 = [${safeDest.latitude}, ${safeDest.longitude}];
 
-          if (userRole === 'volunteer' || isSelfDelivery) {
-            // --- VOLUNTEER & SELF-DELIVERY VIEW: Show full route & navigation ---
-            map.fitBounds([p1, p2], { paddingTopLeft: [20, 100], paddingBottomRight: [20, 250], maxZoom: 15 });
+          // Always fit bounds to the whole route
+          map.fitBounds([p1, p2], { paddingTopLeft: [20, 100], paddingBottomRight: [20, 250], maxZoom: 15 });
 
-            // Fetch real street-routing from free OSRM API
-            var osrmUrl = 'https://router.project-osrm.org/route/v1/driving/${safeOrigin.longitude},${safeOrigin.latitude};${safeDest.longitude},${safeDest.latitude}?overview=full&geometries=geojson';
-            
-            fetch(osrmUrl)
-              .then(res => res.json())
-              .then(data => {
-                 if(data.routes && data.routes.length > 0) {
-                   var coords = data.routes[0].geometry.coordinates;
-                   var latLngs = coords.map(c => [c[1], c[0]]);
-                   
-                   L.polyline(latLngs, { color: '#111', weight: 8, opacity: 0.6, lineCap: 'round', lineJoin: 'round' }).addTo(map);
-                   L.polyline(latLngs, { color: '#CCFF00', weight: 4, opacity: 1, lineCap: 'round', lineJoin: 'round' }).addTo(map);
-
-                   // Mock Driver Marker (always at p1)
-                   if ((hasDriver || isSelfDelivery) && status !== 'pending') {
-                      var driverHtml = '<div style="background-color: #fff; width: 32px; height: 32px; border-radius: 16px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 15px rgba(204, 255, 0, 0.6); font-size: 16px; border: 2px solid #000;">🛵</div>';
-                      var driverIcon = L.divIcon({ className: '', html: driverHtml, iconSize: [32, 32], iconAnchor: [16, 16] });
-                      L.marker(p1, { icon: driverIcon, zIndexOffset: 1000 }).addTo(map);
-                   }
-                 } else {
-                   L.polyline([p1, p2], { color: '#CCFF00', weight: 4, dashArray: '10, 15', lineCap: 'round' }).addTo(map);
-                 }
-              })
-              .catch(() => {
-                 L.polyline([p1, p2], { color: '#CCFF00', weight: 4, dashArray: '10, 15', lineCap: 'round' }).addTo(map);
-              });
-
-            var origIcon = L.divIcon({ className: '', html: '<div class="pip-marker" style="background-color: #FF6B00;"></div>' });
-            L.marker(p1, { icon: origIcon }).addTo(map);
-
-            var destIcon = L.divIcon({ className: '', html: '<div class="pip-marker" style="background-color: #CCFF00;"></div>' });
-            L.marker(p2, { icon: destIcon }).addTo(map);
-
-          } else {
-            // --- RESTAURANT / NGO VIEW: Single marker ---
-            // Use real driver GPS from state if available, else fall back to status-based estimate
-            var realDriverLat = ${driverLocation?.latitude || 'null'};
-            var realDriverLng = ${driverLocation?.longitude || 'null'};
-            var hasRealLocation = realDriverLat !== null && realDriverLng !== null;
-            var isSelfDelivery = status === 'self_delivery_active';
-            var singlePos;
-            var isDriverMarker = false;
-
-            if (isSelfDelivery || !hasDriver) {
-               singlePos = p2; // NGO location (fixed)
-               var icon = L.divIcon({ className: '', html: '<div class="pip-marker" style="background-color: #CCFF00;"></div>', iconSize: [16, 16], iconAnchor: [8, 8] });
-               L.marker(singlePos, { icon: icon }).addTo(map);
-               map.setView(singlePos, 15);
-            } else {
-               // Show driver location
-               isDriverMarker = true;
-               var driverHtml = '<div style="background-color: #fff; width: 32px; height: 32px; border-radius: 16px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 15px rgba(204, 255, 0, 0.6); font-size: 16px; border: 2px solid #000;">🛵</div>';
-               var driverIcon = L.divIcon({ className: '', html: driverHtml, iconSize: [32, 32], iconAnchor: [16, 16] });
-               
-               if (hasRealLocation) {
-                   singlePos = [realDriverLat, realDriverLng];
+          // Draw the route
+          var osrmUrl = 'https://router.project-osrm.org/route/v1/driving/${safeOrigin.longitude},${safeOrigin.latitude};${safeDest.longitude},${safeDest.latitude}?overview=full&geometries=geojson';
+          fetch(osrmUrl)
+            .then(res => res.json())
+            .then(data => {
+               if(data.routes && data.routes.length > 0) {
+                 var coords = data.routes[0].geometry.coordinates;
+                 var latLngs = coords.map(c => [c[1], c[0]]);
+                 L.polyline(latLngs, { color: '#111', weight: 8, opacity: 0.6, lineCap: 'round', lineJoin: 'round' }).addTo(map);
+                 L.polyline(latLngs, { color: '#CCFF00', weight: 4, opacity: 1, lineCap: 'round', lineJoin: 'round' }).addTo(map);
                } else {
-                   // Fallback based on status while waiting for first GPS push
-                   if (status === 'approved' || status === 'driver_reached') singlePos = p1;
-                   else if (status === 'picked_up') singlePos = [(p1[0]+p2[0])/2, (p1[1]+p2[1])/2];
-                   else singlePos = p2;
+                 L.polyline([p1, p2], { color: '#CCFF00', weight: 4, dashArray: '10, 15', lineCap: 'round' }).addTo(map);
                }
-               
-               // Store marker on window so it can be updated via injectJavaScript
-               window.driverMarker = L.marker(singlePos, { icon: driverIcon, zIndexOffset: 1000 }).addTo(map);
-               map.setView(singlePos, 15);
-            }
+            })
+            .catch(() => {
+               L.polyline([p1, p2], { color: '#CCFF00', weight: 4, dashArray: '10, 15', lineCap: 'round' }).addTo(map);
+            });
+
+          // Draw Origin and Destination markers
+          var origIcon = L.divIcon({ className: '', html: '<div class="pip-marker" style="background-color: #FF6B00;"></div>' });
+          L.marker(p1, { icon: origIcon }).addTo(map);
+          var destIcon = L.divIcon({ className: '', html: '<div class="pip-marker" style="background-color: #CCFF00;"></div>' });
+          L.marker(p2, { icon: destIcon }).addTo(map);
+
+          // Draw Driver Marker if applicable
+          if ((hasDriver || isSelfDelivery) && status !== 'pending') {
+             var driverHtml = '<div style="background-color: #fff; width: 32px; height: 32px; border-radius: 16px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 15px rgba(204, 255, 0, 0.6); font-size: 16px; border: 2px solid #000;">🛵</div>';
+             var driverIcon = L.divIcon({ className: '', html: driverHtml, iconSize: [32, 32], iconAnchor: [16, 16] });
+             
+             var realDriverLat = ${driverLocation?.latitude || 'null'};
+             var realDriverLng = ${driverLocation?.longitude || 'null'};
+             var driverPos;
+
+             if (realDriverLat !== null && realDriverLng !== null) {
+                 driverPos = [realDriverLat, realDriverLng];
+             } else {
+                 if (status === 'approved' || status === 'driver_reached' || status === 'self_delivery_active') driverPos = p1;
+                 else if (status === 'picked_up') driverPos = [(p1[0]+p2[0])/2, (p1[1]+p2[1])/2];
+                 else driverPos = p2;
+             }
+             
+             window.driverMarker = L.marker(driverPos, { icon: driverIcon, zIndexOffset: 1000 }).addTo(map);
           }
         ` : ''}
 
