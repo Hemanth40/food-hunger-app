@@ -23,3 +23,21 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         status["status"] = "degraded"
         
     return status
+
+@router.get("/debug/schema")
+async def debug_schema(db: AsyncSession = Depends(get_db)):
+    try:
+        res = await db.execute(text("PRAGMA table_info(donation_requests)"))
+        cols = [dict(row._mapping) for row in res]
+        return {"columns": cols}
+    except Exception:
+        try:
+            res = await db.execute(text("""
+                SELECT column_name, data_type 
+                FROM information_schema.columns 
+                WHERE table_name = 'donation_requests'
+            """))
+            cols = [dict(row._mapping) for row in res]
+            return {"columns": cols}
+        except Exception as e2:
+            return {"error": str(e2)}
