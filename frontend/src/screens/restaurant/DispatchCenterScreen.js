@@ -86,7 +86,9 @@ export default function DispatchCenterScreen({ navigation }) {
                     <Text style={styles.cardSub}>To: {item.receiver_name || 'NGO Hub'}</Text>
                   </View>
                   <View style={[styles.pill, { backgroundColor: color + '18' }]}>
-                    <Text style={[styles.pillText, { color }]}>{item.status?.replace('_', ' ')}</Text>
+                    <Text style={[styles.pillText, { color }]}>
+                      {item.status === 'approved' && !item.assigned_driver_id && item.delivery_mode !== 'self' ? 'Pending Driver' : item.status?.replace('_', ' ')}
+                    </Text>
                   </View>
                 </View>
 
@@ -112,15 +114,15 @@ export default function DispatchCenterScreen({ navigation }) {
                       <Text style={[styles.btnText, { color }]}>{nextLabel}</Text>
                     </TouchableOpacity>
                   )}
-                  {/* Track Order Button injected here */}
+                  {/* Track Order Button always visible now */}
                   <TouchableOpacity 
                       style={[styles.btn, { backgroundColor: '#FF6B0020', flex: 1 }]} 
                       onPress={() => navigation.navigate('LiveTracker', {
                           donationId: item.id,
                           status: item.delivery_mode === 'self' ? 'self_delivery_active' : item.status,
-                          restaurantLocation: { latitude: 12.9716, longitude: 77.5946 }, // Mock coords
+                          restaurantLocation: { latitude: item.donation_latitude || 12.9716, longitude: item.donation_longitude || 77.5946 },
                           restaurantName: "My Restaurant",
-                          ngoLocation: { latitude: 12.9800, longitude: 77.6000 },
+                          ngoLocation: { latitude: item.receiver_latitude || 12.9800, longitude: item.receiver_longitude || 77.6000 },
                           ngoName: item.receiver_name || "NGO Hub",
                           volunteerName: item.assigned_driver_name
                       })}
