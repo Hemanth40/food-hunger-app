@@ -25,25 +25,13 @@ export default function NGOHome() {
   const toArray = (data) => Array.isArray(data) ? data : (data?.items ?? data?.results ?? data?.donations ?? []);
 
   const loadData = async () => {
-    // Always load ALL available donations, regardless of location
     try {
       const res = await client.get('/donations/?status=available&limit=50');
       setDonations(toArray(res.data));
-    } catch {
-      // fallback to nearby if /donations/ not available
-      try {
-        let lat = user?.latitude, lng = user?.longitude;
-        if (!lat || !lng) {
-          const perm = await Location.requestForegroundPermissionsAsync();
-          if (perm.status === 'granted') {
-            const loc = await Location.getCurrentPositionAsync({});
-            lat = loc.coords.latitude; lng = loc.coords.longitude;
-            setUserCoords({ latitude: lat, longitude: lng });
-          } else { lat = 17.385; lng = 78.4867; }
-        }
-        const res = await client.get(`/donations/nearby?latitude=${lat}&longitude=${lng}&radius_km=50`);
-        setDonations(toArray(res.data));
-      } catch {}
+    } catch (e) {
+      // If the main endpoint fails, show empty list — don't blank screen
+      console.warn('[NGOHome] Failed to load donations:', e?.message);
+      setDonations([]);
     }
   };
 

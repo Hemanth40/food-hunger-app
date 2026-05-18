@@ -26,14 +26,14 @@ export default function RestaurantHome({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
 
   const loadData = async () => {
-    const [historyRes, statsRes, dispatchRes] = await Promise.all([
+    const [historyRes, statsRes, dispatchRes] = await Promise.allSettled([
       client.get('/donations/my/history'),
       client.get('/donations/my/stats'),
       client.get('/requests/donor/dispatches'),
     ]);
-    setDonations(historyRes.data);
-    setStats(statsRes.data);
-    setDispatches(dispatchRes.data);
+    if (historyRes.status === 'fulfilled') setDonations(historyRes.value.data);
+    if (statsRes.status === 'fulfilled') setStats(statsRes.value.data);
+    if (dispatchRes.status === 'fulfilled') setDispatches(dispatchRes.value.data);
   };
 
   useFocusEffect(useCallback(() => { loadData().catch(() => {}); }, []));

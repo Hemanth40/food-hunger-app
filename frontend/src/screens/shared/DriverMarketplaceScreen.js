@@ -36,13 +36,12 @@ export default function DriverMarketplaceScreen() {
   const toArr = (d) => Array.isArray(d) ? d : (d?.items ?? d?.results ?? []);
 
   const loadData = async () => {
-    const [openRes, myRes] = await Promise.all([
+    const [openRes, myRes] = await Promise.allSettled([
       client.get('/requests/driver/open'),
       client.get('/requests/driver/my'),
     ]);
-
-    setOpenJobs(toArr(openRes.data));
-    setMyJobs(toArr(myRes.data));
+    if (openRes.status === 'fulfilled') setOpenJobs(toArr(openRes.value.data));
+    if (myRes.status === 'fulfilled') setMyJobs(toArr(myRes.value.data));
   };
 
   useFocusEffect(
