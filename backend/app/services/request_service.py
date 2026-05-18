@@ -213,7 +213,12 @@ async def get_donor_dispatches(db: AsyncSession, donor_id: int) -> List[RequestR
         query.where(
             and_(
                 donor_alias.id == donor_id,
-                DonationRequest.status.in_([RequestStatus.APPROVED, RequestStatus.PICKED_UP]),
+                DonationRequest.status.in_([
+                    RequestStatus.APPROVED,
+                    RequestStatus.DRIVER_REACHED,
+                    RequestStatus.PICKED_UP,
+                    RequestStatus.DELIVERED,
+                ]),
             )
         ).order_by(DonationRequest.claimed_at.desc())
     )
