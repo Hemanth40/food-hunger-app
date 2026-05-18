@@ -121,7 +121,7 @@ export default function ClaimDonationScreen({ navigation }) {
                     onPress={() => navigation.navigate('LiveTracker', {
                       requestId: item.id,
                       donationId: item.donation_id,
-                      status: item.status,
+                      status: item.delivery_mode === 'self' ? 'self_delivery_active' : item.status,
                       restaurantLocation: {
                         latitude: item.donation_latitude || 12.9716,
                         longitude: item.donation_longitude || 77.5946,
