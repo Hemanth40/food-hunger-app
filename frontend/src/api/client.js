@@ -39,6 +39,8 @@ client.interceptors.response.use(
   async (error) => {
     if (error.code === 'ECONNABORTED' || !error.response) {
       console.error('[API] Network error or timeout — backend may be waking up (cold start), retry in 30s', error.message);
+    } else {
+      console.error('[API] Error details:', error.response?.status, error.response?.data);
     }
     return Promise.reject(error);
   }
