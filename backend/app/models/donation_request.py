@@ -5,7 +5,7 @@ DonationRequest model for NGO claims and delivery assignment.
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -36,6 +36,8 @@ class DonationRequest(Base):
     message: Mapped[str] = mapped_column(String(500), nullable=True)
     claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    driver_latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    driver_longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

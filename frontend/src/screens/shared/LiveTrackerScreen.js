@@ -28,37 +28,21 @@ export default function LiveTrackerScreen({ route, navigation }) {
   } = route.params;
 
   const [currentLocation, setCurrentLocation] = useState(null);
+  const [driverLocation, setDriverLocation] = useState(null); // real-time driver GPS
   const [distance, setDistance] = useState(0);
   const [updating, setUpdating] = useState(false);
-
-  let origin, destination, isPickupPhase;
-
-  if (user?.role === 'volunteer') {
-    if (status === 'accepted') {
-      origin = currentLocation || restaurantLocation; 
-      destination = restaurantLocation;
-      isPickupPhase = true;
-    } else {
-      origin = currentLocation || restaurantLocation; 
-      destination = ngoLocation;
-      isPickupPhase = false;
-    }
-  } else {
-    if (status === 'self_delivery_active') {
-      origin = restaurantLocation;
-      destination = ngoLocation;
-      isPickupPhase = false;
-    } else {
-      origin = restaurantLocation;
-      destination = status === 'picked_up' ? ngoLocation : restaurantLocation;
-      isPickupPhase = status !== 'picked_up';
-    }
-  }
+  const [renderMap, setRenderMap] = useState(false);
 
   useEffect(() => {
+    const t = setTimeout(() => setRenderMap(true), 350);
+    return () => clearTimeout(t);
+  }, []);
+
+  // --- Get current device location ---
+  useEffect(() => {
     (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
+      let { status: permStatus } = await Location.requestForegroundPermissionsAsync();
+      if (permStatus === 'granted') {
         let loc = await Location.getCurrentPositionAsync({});
         setCurrentLocation({
           latitude: loc.coords.latitude,
@@ -70,11 +54,88 @@ export default function LiveTrackerScreen({ route, navigation }) {
     })();
   }, []);
 
+  // --- VOLUNTEER: Push GPS to backend every 10s ---
+  useEffect(() => {
+    if (user?.role !== 'volunteer' || !requestId || !currentLocation) return;
+    const pushLocation = async () => {
+      try {
+        await client.put(`/requests/${requestId}/driver-location`, {
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude,
+        });
+      } catch (_) {}
+    };
+    pushLocation();
+    const interval = setInterval(pushLocation, 10000);
+    return () => clearInterval(interval);
+  }, [user?.role, requestId, currentLocation]);
+
+  // --- RESTAURANT / NGO: Poll driver location every 10s and update map ---
+  useEffect(() => {
+    if (user?.role === 'volunteer' || !requestId || !volunteerName) return;
+    const pollDriverLocation = async () => {
+      try {
+        const res = await client.get(`/requests/${requestId}/driver-location`);
+        if (res.data?.latitude && res.data?.longitude) {
+          const loc = { latitude: res.data.latitude, longitude: res.data.longitude };
+          setDriverLocation(loc);
+          // Inject updated driver position into the live WebView map
+          if (webRef.current) {
+            webRef.current.injectJavaScript(`
+              if (window.driverMarker) {
+                window.driverMarker.setLatLng([${res.data.latitude}, ${res.data.longitude}]);
+              }
+              true;
+            `);
+          }
+        }
+      } catch (_) {}
+    };
+    pollDriverLocation();
+    const interval = setInterval(pollDriverLocation, 10000);
+    return () => clearInterval(interval);
+  }, [user?.role, requestId, volunteerName]);
+
+  // Volunteer phase logic — must be computed BEFORE the distance effect below
+  let origin, destination, isPickupPhase;
+  let volunteerNextStatus = null;
+  let volunteerBtnLabel = '';
+  let volunteerBtnIcon = '';
+
+  if (user?.role === 'volunteer') {
+    if (status === 'accepted' || status === 'approved') {
+      origin = currentLocation || restaurantLocation; 
+      destination = restaurantLocation;
+      isPickupPhase = true;
+      volunteerNextStatus = 'driver_reached';
+      volunteerBtnLabel = 'Reached Restaurant';
+      volunteerBtnIcon = 'map-marker-check';
+    } else if (status === 'driver_reached') {
+      origin = currentLocation || restaurantLocation; 
+      destination = ngoLocation;
+      isPickupPhase = false;
+      volunteerNextStatus = 'picked_up';
+      volunteerBtnLabel = "I've Picked It Up";
+      volunteerBtnIcon = 'package-variant-closed';
+    } else {
+      origin = currentLocation || restaurantLocation; 
+      destination = ngoLocation;
+      isPickupPhase = false;
+      volunteerNextStatus = 'delivered';
+      volunteerBtnLabel = "I've Delivered It";
+      volunteerBtnIcon = 'check-decagram';
+    }
+  } else {
+    origin = restaurantLocation;
+    destination = ngoLocation;
+    isPickupPhase = (status === 'approved');
+  }
+
   // Distance computation
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (origin && destination) {
-      // Simple Haversine (Crow-flies distance)
-      const R = 6371; // km
+      const R = 6371;
       const dLat = (destination.latitude - origin.latitude) * Math.PI / 180;
       const dLon = (destination.longitude - origin.longitude) * Math.PI / 180;
       const a = 
@@ -84,7 +145,16 @@ export default function LiveTrackerScreen({ route, navigation }) {
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
       setDistance(R * c);
     }
-  }, [origin, destination]);
+  }, [status, currentLocation]);
+
+  // For single-device testing: offset dest if same as origin
+  let safeOrigin = origin;
+  let safeDest = destination;
+  if (origin && destination && 
+      Math.abs(origin.latitude - destination.latitude) < 0.0001 && 
+      Math.abs(origin.longitude - destination.longitude) < 0.0001) {
+    safeDest = { latitude: destination.latitude + 0.005, longitude: destination.longitude + 0.005 };
+  }
 
   const mapHtml = `
     <!DOCTYPE html>
@@ -108,49 +178,87 @@ export default function LiveTrackerScreen({ route, navigation }) {
         // Dark Mode Maps (Digital Alchemist vibe)
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
 
-        ${origin && destination ? `
-          var p1 = [${origin.latitude}, ${origin.longitude}];
-          var p2 = [${destination.latitude}, ${destination.longitude}];
-          map.fitBounds([p1, p2], { paddingTopLeft: [20, 100], paddingBottomRight: [20, 250] });
+        ${safeOrigin && safeDest ? `
+          var status = "${status}";
+          var hasDriver = ${volunteerName ? 'true' : 'false'};
+          var userRole = "${user?.role || 'donor'}";
+          var isSelfDelivery = status === 'self_delivery_active';
 
-          // Fetch real street-routing from free OSRM API
-          var osrmUrl = 'https://router.project-osrm.org/route/v1/driving/${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}?overview=full&geometries=geojson';
-          
-          fetch(osrmUrl)
-            .then(res => res.json())
-            .then(data => {
-               if(data.routes && data.routes.length > 0) {
-                 var coords = data.routes[0].geometry.coordinates;
-                 // OSRM returns [longitude, latitude], Leaflet needs [latitude, longitude]
-                 var latLngs = coords.map(c => [c[1], c[0]]);
-                 
-                 // Background Drop Shadow Line
-                 L.polyline(latLngs, {
-                   color: '#111', weight: 8, opacity: 0.6, lineCap: 'round', lineJoin: 'round'
-                 }).addTo(map);
-                 
-                 // Swiggy-style Glowing Road Route
-                 L.polyline(latLngs, {
-                   color: '#CCFF00', weight: 4, opacity: 1, lineCap: 'round', lineJoin: 'round'
-                 }).addTo(map);
-               } else {
-                 // Fallback to straight dashed line if route not found
+          var p1 = [${safeOrigin.latitude}, ${safeOrigin.longitude}];
+          var p2 = [${safeDest.latitude}, ${safeDest.longitude}];
+
+          if (userRole === 'volunteer') {
+            // --- VOLUNTEER VIEW: Show full route & navigation ---
+            map.fitBounds([p1, p2], { paddingTopLeft: [20, 100], paddingBottomRight: [20, 250], maxZoom: 15 });
+
+            // Fetch real street-routing from free OSRM API
+            var osrmUrl = 'https://router.project-osrm.org/route/v1/driving/${safeOrigin.longitude},${safeOrigin.latitude};${safeDest.longitude},${safeDest.latitude}?overview=full&geometries=geojson';
+            
+            fetch(osrmUrl)
+              .then(res => res.json())
+              .then(data => {
+                 if(data.routes && data.routes.length > 0) {
+                   var coords = data.routes[0].geometry.coordinates;
+                   var latLngs = coords.map(c => [c[1], c[0]]);
+                   
+                   L.polyline(latLngs, { color: '#111', weight: 8, opacity: 0.6, lineCap: 'round', lineJoin: 'round' }).addTo(map);
+                   L.polyline(latLngs, { color: '#CCFF00', weight: 4, opacity: 1, lineCap: 'round', lineJoin: 'round' }).addTo(map);
+
+                   // Mock Driver Marker for Volunteer (always at p1)
+                   if (hasDriver && status !== 'pending') {
+                      var driverHtml = '<div style="background-color: #fff; width: 32px; height: 32px; border-radius: 16px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 15px rgba(204, 255, 0, 0.6); font-size: 16px; border: 2px solid #000;">🛵</div>';
+                      var driverIcon = L.divIcon({ className: '', html: driverHtml, iconSize: [32, 32], iconAnchor: [16, 16] });
+                      L.marker(p1, { icon: driverIcon, zIndexOffset: 1000 }).addTo(map);
+                   }
+                 } else {
+                   L.polyline([p1, p2], { color: '#CCFF00', weight: 4, dashArray: '10, 15', lineCap: 'round' }).addTo(map);
+                 }
+              })
+              .catch(() => {
                  L.polyline([p1, p2], { color: '#CCFF00', weight: 4, dashArray: '10, 15', lineCap: 'round' }).addTo(map);
+              });
+
+            var origIcon = L.divIcon({ className: '', html: '<div class="pip-marker" style="background-color: #FF6B00;"></div>' });
+            L.marker(p1, { icon: origIcon }).addTo(map);
+
+            var destIcon = L.divIcon({ className: '', html: '<div class="pip-marker" style="background-color: #CCFF00;"></div>' });
+            L.marker(p2, { icon: destIcon }).addTo(map);
+
+          } else {
+            // --- RESTAURANT / NGO VIEW: Single marker ---
+            // Use real driver GPS from state if available, else fall back to status-based estimate
+            var realDriverLat = ${driverLocation?.latitude || 'null'};
+            var realDriverLng = ${driverLocation?.longitude || 'null'};
+            var hasRealLocation = realDriverLat !== null && realDriverLng !== null;
+            var isSelfDelivery = status === 'self_delivery_active';
+            var singlePos;
+            var isDriverMarker = false;
+
+            if (isSelfDelivery || !hasDriver) {
+               singlePos = p2; // NGO location (fixed)
+               var icon = L.divIcon({ className: '', html: '<div class="pip-marker" style="background-color: #CCFF00;"></div>', iconSize: [16, 16], iconAnchor: [8, 8] });
+               L.marker(singlePos, { icon: icon }).addTo(map);
+               map.setView(singlePos, 15);
+            } else {
+               // Show driver location
+               isDriverMarker = true;
+               var driverHtml = '<div style="background-color: #fff; width: 32px; height: 32px; border-radius: 16px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 15px rgba(204, 255, 0, 0.6); font-size: 16px; border: 2px solid #000;">🛵</div>';
+               var driverIcon = L.divIcon({ className: '', html: driverHtml, iconSize: [32, 32], iconAnchor: [16, 16] });
+               
+               if (hasRealLocation) {
+                   singlePos = [realDriverLat, realDriverLng];
+               } else {
+                   // Fallback based on status while waiting for first GPS push
+                   if (status === 'approved' || status === 'driver_reached') singlePos = p1;
+                   else if (status === 'picked_up') singlePos = [(p1[0]+p2[0])/2, (p1[1]+p2[1])/2];
+                   else singlePos = p2;
                }
-            })
-            .catch(() => {
-               // Fallback on network error
-               L.polyline([p1, p2], { color: '#CCFF00', weight: 4, dashArray: '10, 15', lineCap: 'round' }).addTo(map);
-            });
-
-          // Origin Marker (Neon Orange)
-          var origIcon = L.divIcon({ className: '', html: '<div class="pip-marker" style="background-color: #FF6B00;"></div>' });
-          L.marker(p1, { icon: origIcon }).addTo(map);
-
-          // Destination Marker (Neon Green)
-          var destIcon = L.divIcon({ className: '', html: '<div class="pip-marker" style="background-color: #CCFF00;"></div>' });
-          L.marker(p2, { icon: destIcon }).addTo(map);
-
+               
+               // Store marker on window so it can be updated via injectJavaScript
+               window.driverMarker = L.marker(singlePos, { icon: driverIcon, zIndexOffset: 1000 }).addTo(map);
+               map.setView(singlePos, 15);
+            }
+          }
         ` : ''}
 
       </script>
@@ -173,15 +281,21 @@ export default function LiveTrackerScreen({ route, navigation }) {
         </View>
 
         {/* Full Screen In-App WebView Map Engine */}
-        <WebView
-          ref={webRef}
-          source={{ html: mapHtml }}
-          style={StyleSheet.absoluteFillObject}
-          bounces={false} scrollEnabled={false}
-          showsVerticalScrollIndicator={false}
-          showsHorizontalScrollIndicator={false}
-          containerStyle={{ backgroundColor: 'transparent' }}
-        />
+        {renderMap ? (
+          <WebView
+            ref={webRef}
+            source={{ html: mapHtml }}
+            style={StyleSheet.absoluteFillObject}
+            bounces={false} scrollEnabled={false}
+            showsVerticalScrollIndicator={false}
+            showsHorizontalScrollIndicator={false}
+            containerStyle={{ backgroundColor: 'transparent' }}
+          />
+        ) : (
+          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#111', alignItems: 'center', justifyContent: 'center' }]}>
+            <ActivityIndicator size="large" color="#CCFF00" />
+          </View>
+        )}
 
         {/* Floating ETA Tag */}
         {distance > 0 && (
@@ -200,10 +314,10 @@ export default function LiveTrackerScreen({ route, navigation }) {
             {/* Delivery Destination Status */}
             <View style={styles.sheetHeader}>
               <Text variant="labelLarge" style={{ color: theme.colors.secondary }}>
-                {isPickupPhase ? 'Picking up at' : 'Delivering to'}
+                {!volunteerName || status === 'approved' ? 'Picking up at' : 'Delivering to'}
               </Text>
               <Text variant="titleMedium" style={styles.targetName}>
-                {isPickupPhase ? restaurantName : ngoName}
+                {!volunteerName || status === 'approved' ? restaurantName : ngoName}
               </Text>
             </View>
 
@@ -216,7 +330,7 @@ export default function LiveTrackerScreen({ route, navigation }) {
                 <View style={styles.profileText}>
                   <Text style={styles.cardTitle}>{restaurantName}</Text>
                   <Text style={styles.cardSubtitle}>
-                    {isPickupPhase ? 'Preparing food' : 'Food dispatched'}
+                    {status === 'approved' ? 'Preparing food' : status === 'driver_reached' ? 'Handing over food' : 'Food dispatched'}
                   </Text>
                 </View>
               </View>
@@ -224,11 +338,21 @@ export default function LiveTrackerScreen({ route, navigation }) {
               {/* Dynamic Right Profile (Driver / NGO) */}
               {status !== 'self_delivery_active' && (
                 <View style={styles.profileCard}>
-                  <Avatar.Icon size={40} icon="motorbike" style={{ backgroundColor: 'rgba(204, 255, 0, 0.2)' }} color={theme.colors.secondary} />
+                  <Avatar.Icon 
+                    size={40} 
+                    icon={!volunteerName ? "account-search" : "motorbike"} 
+                    style={{ backgroundColor: !volunteerName ? 'rgba(255,255,255,0.1)' : 'rgba(204, 255, 0, 0.2)' }} 
+                    color={theme.colors.secondary} 
+                  />
                   <View style={styles.profileText}>
-                    <Text style={styles.cardTitle}>{volunteerName || "Delivery Partner"}</Text>
+                    <Text style={styles.cardTitle}>
+                      {!volunteerName ? "Driver: Not Assigned" : volunteerName}
+                    </Text>
                     <Text style={styles.cardSubtitle}>
-                      {isPickupPhase ? 'On the way to pickup' : 'On the way to dropoff'}
+                      {!volunteerName ? 'Waiting for volunteer' 
+                       : status === 'approved' ? 'On the way to pickup' 
+                       : status === 'driver_reached' ? 'At restaurant' 
+                       : 'On the way to dropoff'}
                     </Text>
                   </View>
                 </View>
@@ -269,7 +393,7 @@ export default function LiveTrackerScreen({ route, navigation }) {
                     disabled={updating}
                     onPress={async () => {
                       if (!requestId) return;
-                      const nextStatus = isPickupPhase ? 'picked_up' : 'delivered';
+                      const nextStatus = volunteerNextStatus;
                       try {
                         setUpdating(true);
                         await client.put(`/requests/${requestId}/status`, { status: nextStatus });
@@ -284,8 +408,8 @@ export default function LiveTrackerScreen({ route, navigation }) {
                   >
                     {updating ? <ActivityIndicator size="small" color={C.black} /> : (
                       <>
-                        <Icon name={isPickupPhase ? "package-variant-closed" : "check-decagram"} size={20} color={C.black} />
-                        <Text style={styles.statusBtnText}>{isPickupPhase ? "I've Picked It Up" : "I've Delivered It"}</Text>
+                        <Icon name={volunteerBtnIcon} size={20} color={C.black} />
+                        <Text style={styles.statusBtnText}>{volunteerBtnLabel}</Text>
                       </>
                     )}
                   </TouchableOpacity>

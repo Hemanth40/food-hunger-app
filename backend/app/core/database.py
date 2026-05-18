@@ -31,6 +31,8 @@ DEV_SCHEMA_PATCHES = {
     "donation_requests": {
         "assigned_driver_id": "INTEGER",
         "delivery_mode": "VARCHAR(20) NOT NULL DEFAULT 'flex'",
+        "driver_latitude": "DOUBLE PRECISION",
+        "driver_longitude": "DOUBLE PRECISION",
     },
 }
 

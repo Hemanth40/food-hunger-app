@@ -14,7 +14,7 @@ class RequestCreate(BaseModel):
 
 
 class RequestUpdate(BaseModel):
-    status: str = Field(..., pattern="^(approved|picked_up|delivered|cancelled)$")
+    status: str = Field(..., pattern="^(approved|driver_reached|picked_up|delivered|cancelled)$")
 
 
 class RequestResponse(BaseModel):
@@ -41,6 +41,8 @@ class RequestResponse(BaseModel):
     donation_pickup_address: Optional[str] = None
     donation_latitude: Optional[float] = None
     donation_longitude: Optional[float] = None
+    driver_latitude: Optional[float] = None
+    driver_longitude: Optional[float] = None
 
     class Config:
         from_attributes = True

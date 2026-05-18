@@ -5,6 +5,7 @@ Requests and delivery assignment API routes.
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -107,3 +108,35 @@ async def get_claims_for_donation(
     db: AsyncSession = Depends(get_db),
 ):
     return await request_service.get_donation_claims(db, donation_id)
+
+
+class DriverLocationUpdate(BaseModel):
+    latitude: float
+    longitude: float
+
+
+@router.put("/{request_id}/driver-location")
+async def update_driver_location(
+    request_id: int,
+    data: DriverLocationUpdate,
+    current_user: dict = Depends(require_roles(["user", "volunteer"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """Called by the volunteer app every few seconds to broadcast live GPS."""
+    await request_service.update_driver_location(
+        db, request_id, current_user["user_id"], data.latitude, data.longitude
+    )
+    return {"ok": True}
+
+
+@router.get("/{request_id}/driver-location")
+async def get_driver_location(
+    request_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Polled by restaurant/NGO to get driver's current GPS coordinates."""
+    loc = await request_service.get_driver_location(db, request_id)
+    if loc is None:
+        raise HTTPException(status_code=404, detail="Driver location not available yet")
+    return loc

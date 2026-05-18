@@ -56,6 +56,8 @@ def _build_request_response(
         donation_pickup_address=donation.pickup_address,
         donation_latitude=donation.latitude,
         donation_longitude=donation.longitude,
+        driver_latitude=claim.driver_latitude,
+        driver_longitude=claim.driver_longitude,
     )
 
 
@@ -298,3 +300,35 @@ async def set_donor_self_delivery(
 
     refreshed = await _get_claim_context(db, request_id)
     return _build_request_response(*refreshed)
+
+
+async def update_driver_location(
+    db: AsyncSession,
+    request_id: int,
+    driver_id: int,
+    latitude: float,
+    longitude: float,
+) -> None:
+    """Save the driver's current GPS coordinates on the request record."""
+    result = await db.execute(select(DonationRequest).where(DonationRequest.id == request_id))
+    claim = result.scalar_one_or_none()
+    if not claim:
+        return
+    if claim.assigned_driver_id != driver_id:
+        return  # Only the assigned driver can update their location
+    claim.driver_latitude = latitude
+    claim.driver_longitude = longitude
+    await db.flush()
+
+
+async def get_driver_location(
+    db: AsyncSession,
+    request_id: int,
+) -> Optional[dict]:
+    """Return the driver's latest GPS coordinates, or None if not yet set."""
+    result = await db.execute(select(DonationRequest).where(DonationRequest.id == request_id))
+    claim = result.scalar_one_or_none()
+    if not claim or claim.driver_latitude is None:
+        return None
+    return {"latitude": claim.driver_latitude, "longitude": claim.driver_longitude}
+
