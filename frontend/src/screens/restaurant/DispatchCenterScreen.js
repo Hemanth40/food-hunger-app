@@ -102,7 +102,7 @@ export default function DispatchCenterScreen({ navigation }) {
                 </View>
 
                 <View style={styles.btnRow}>
-                  {item.delivery_mode === 'flex' && !item.assigned_driver_id && (
+                  {item.delivery_mode !== 'self' && !item.assigned_driver_id && (
                     <TouchableOpacity style={[styles.btn, { backgroundColor: '#EEF2FF', flex: 1 }]} onPress={() => selfDeliver(item.id)}>
                       <Icon name="account-arrow-right" size={15} color="#2563EB" />
                       <Text style={[styles.btnText, { color: '#2563EB' }]}>I will deliver</Text>
@@ -118,7 +118,8 @@ export default function DispatchCenterScreen({ navigation }) {
                   <TouchableOpacity 
                       style={[styles.btn, { backgroundColor: '#FF6B0020', flex: 1 }]} 
                       onPress={() => navigation.navigate('LiveTracker', {
-                          donationId: item.id,
+                          requestId: item.id,
+                          donationId: item.donation_id,
                           status: item.delivery_mode === 'self' ? 'self_delivery_active' : item.status,
                           restaurantLocation: { latitude: item.donation_latitude || 12.9716, longitude: item.donation_longitude || 77.5946 },
                           restaurantName: "My Restaurant",

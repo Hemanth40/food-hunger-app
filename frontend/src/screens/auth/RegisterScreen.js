@@ -58,7 +58,7 @@ export default function RegisterScreen({ navigation }) {
     } finally { setLoading(false); }
   };
 
-  const needsLocation = role === 'ngo' || role === 'restaurant';
+  const needsLocation = role === 'ngo' || role === 'user' || role === 'restaurant';
   const canSubmit = fullName && phone.trim().length >= 10 && password.length >= 6;
 
   if (step === 'otp') {
@@ -158,8 +158,8 @@ export default function RegisterScreen({ navigation }) {
               activeOpacity={0.7} onPress={() => setShowMap(true)}>
               <Icon name={selectedLocation ? 'check-circle' : 'map-marker-outline'} size={22}
                 color={selectedLocation ? C.green : C.grey2} />
-              <Text style={[styles.mapText, selectedLocation && { color: C.green }]}>
-                {selectedLocation ? 'Location pinned ✓' : 'Pin your location (optional)'}
+              <Text style={[styles.mapText, selectedLocation && { color: C.green }]} numberOfLines={1}>
+                {selectedLocation ? `Pinned: ${address}` : 'Pin your location (optional)'}
               </Text>
               <Icon name="chevron-right" size={18} color={C.grey3} />
             </TouchableOpacity>
@@ -186,7 +186,11 @@ export default function RegisterScreen({ navigation }) {
         </ScrollView>
       </KeyboardAvoidingView>
       <LocationPickerModal visible={showMap} onClose={() => setShowMap(false)}
-        onSelectLocation={(loc) => { setSelectedLocation(loc); setShowMap(false); }} />
+        onSelectLocation={(loc) => {
+          setSelectedLocation(loc);
+          if (loc?.address) setAddress(loc.address);
+          setShowMap(false);
+        }} />
     </SafeAreaView>
   );
 }

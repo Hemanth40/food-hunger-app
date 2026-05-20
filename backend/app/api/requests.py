@@ -129,6 +129,19 @@ async def update_driver_location(
     return {"ok": True}
 
 
+@router.get("/{request_id}", response_model=RequestResponse)
+async def get_claim_by_id(
+    request_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Retrieve details for a single delivery request by ID."""
+    claim = await request_service.get_claim(db, request_id)
+    if not claim:
+        raise HTTPException(status_code=404, detail="Request not found")
+    return claim
+
+
 @router.get("/{request_id}/driver-location")
 async def get_driver_location(
     request_id: int,

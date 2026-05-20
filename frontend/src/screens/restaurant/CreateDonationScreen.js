@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, Alert,
   ScrollView, KeyboardAvoidingView, Platform, Image, StyleSheet,
 } from 'react-native';
+import { AuthContext } from '../../context/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from '@expo/vector-icons/MaterialCommunityIcons';
 import * as ImagePicker from 'expo-image-picker';
@@ -20,17 +21,33 @@ const DELIVERY_OPTS = [
 ];
 
 export default function CreateDonationScreen({ navigation }) {
+  const { user, updateProfile } = useContext(AuthContext);
   const [foodType, setFoodType]     = useState('');
   const [quantity, setQuantity]     = useState('');
   const [description, setDescription] = useState('');
-  const [pickupAddress, setPickupAddress] = useState('');
+  const [pickupAddress, setPickupAddress] = useState(user?.address || '');
   const [deliveryPref, setDeliveryPref]   = useState('flex');
   const [loading, setLoading]       = useState(false);
   const [imageBase64, setImageBase64] = useState(null);
   const [imageUri, setImageUri]     = useState(null);
   const [showMap, setShowMap]       = useState(false);
-  const [location, setLocation]     = useState(null);
+  const [location, setLocation]     = useState(
+    typeof user?.latitude === 'number' && typeof user?.longitude === 'number'
+      ? { latitude: user.latitude, longitude: user.longitude }
+      : null
+  );
   const [error, setError]           = useState('');
+
+  useEffect(() => {
+    if (user) {
+      if (user.address && !pickupAddress) {
+        setPickupAddress(user.address);
+      }
+      if (typeof user.latitude === 'number' && typeof user.longitude === 'number' && !location) {
+        setLocation({ latitude: user.latitude, longitude: user.longitude });
+      }
+    }
+  }, [user]);
 
   const pickImage = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -111,6 +128,19 @@ export default function CreateDonationScreen({ navigation }) {
         image_base64: imageBase64,
         image_mime_type: 'image/jpeg',
       });
+      
+      // Update user's static profile location if it changed or wasn't set
+      const locationChanged =
+        user?.latitude !== lat ||
+        user?.longitude !== lng ||
+        user?.address !== addr;
+      if (locationChanged) {
+        try {
+          await updateProfile({ latitude: lat, longitude: lng, address: addr });
+        } catch (profileErr) {
+          console.log('Failed to update restaurant static location:', profileErr);
+        }
+      }
       
       // Clear form so previous details don't persist
       setFoodType('');

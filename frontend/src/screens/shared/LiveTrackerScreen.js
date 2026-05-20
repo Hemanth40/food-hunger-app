@@ -32,6 +32,8 @@ export default function LiveTrackerScreen({ route, navigation }) {
   const [distance, setDistance] = useState(0);
   const [updating, setUpdating] = useState(false);
   const [renderMap, setRenderMap] = useState(false);
+  const [currentStatus, setCurrentStatus] = useState(status);
+  const [currentVolunteerName, setCurrentVolunteerName] = useState(volunteerName);
 
   useEffect(() => {
     const t = setTimeout(() => setRenderMap(true), 350);
@@ -72,7 +74,7 @@ export default function LiveTrackerScreen({ route, navigation }) {
 
   // --- RESTAURANT / NGO: Poll driver location every 10s and update map ---
   useEffect(() => {
-    if (user?.role === 'volunteer' || !requestId || !volunteerName) return;
+    if (user?.role === 'volunteer' || !requestId || !currentVolunteerName) return;
     const pollDriverLocation = async () => {
       try {
         const res = await client.get(`/requests/${requestId}/driver-location`);
@@ -94,7 +96,29 @@ export default function LiveTrackerScreen({ route, navigation }) {
     pollDriverLocation();
     const interval = setInterval(pollDriverLocation, 10000);
     return () => clearInterval(interval);
-  }, [user?.role, requestId, volunteerName]);
+  }, [user?.role, requestId, currentVolunteerName]);
+
+  // --- RESTAURANT / NGO: Poll request details every 10s to see if driver accepted or status changed ---
+  useEffect(() => {
+    if (user?.role === 'volunteer' || !requestId) return;
+    const pollRequestDetails = async () => {
+      try {
+        const res = await client.get(`/requests/${requestId}`);
+        if (res.data) {
+          if (res.data.status) {
+            const nextStatus = res.data.delivery_mode === 'self' ? 'self_delivery_active' : res.data.status;
+            setCurrentStatus(nextStatus);
+          }
+          if (res.data.assigned_driver_name) {
+            setCurrentVolunteerName(res.data.assigned_driver_name);
+          }
+        }
+      } catch (_) {}
+    };
+    pollRequestDetails();
+    const interval = setInterval(pollRequestDetails, 10000);
+    return () => clearInterval(interval);
+  }, [user?.role, requestId]);
 
   // Volunteer phase logic — must be computed BEFORE the distance effect below
   let origin, destination, isPickupPhase;
@@ -103,17 +127,17 @@ export default function LiveTrackerScreen({ route, navigation }) {
   let volunteerBtnIcon = '';
 
   if (user?.role === 'volunteer') {
-    if (status === 'accepted' || status === 'approved') {
+    if (currentStatus === 'accepted' || currentStatus === 'approved') {
       origin = currentLocation || restaurantLocation; 
       destination = restaurantLocation;
       isPickupPhase = true;
       volunteerNextStatus = 'driver_reached';
       volunteerBtnLabel = 'Reached Restaurant';
       volunteerBtnIcon = 'map-marker-check';
-    } else if (status === 'driver_reached') {
+    } else if (currentStatus === 'driver_reached') {
       origin = currentLocation || restaurantLocation; 
-      destination = ngoLocation;
-      isPickupPhase = false;
+      destination = restaurantLocation;
+      isPickupPhase = true;
       volunteerNextStatus = 'picked_up';
       volunteerBtnLabel = "I've Picked It Up";
       volunteerBtnIcon = 'package-variant-closed';
@@ -126,9 +150,14 @@ export default function LiveTrackerScreen({ route, navigation }) {
       volunteerBtnIcon = 'check-decagram';
     }
   } else {
-    origin = restaurantLocation;
-    destination = ngoLocation;
-    isPickupPhase = (status === 'approved');
+    isPickupPhase = (currentStatus === 'approved' || currentStatus === 'driver_reached');
+    if (driverLocation) {
+      origin = driverLocation;
+      destination = isPickupPhase ? restaurantLocation : ngoLocation;
+    } else {
+      origin = restaurantLocation;
+      destination = ngoLocation;
+    }
   }
 
   // Distance computation
@@ -145,7 +174,7 @@ export default function LiveTrackerScreen({ route, navigation }) {
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
       setDistance(R * c);
     }
-  }, [status, currentLocation]);
+  }, [currentStatus, currentLocation, driverLocation]);
 
   // For single-device testing: offset dest if same as origin
   let safeOrigin = origin;
@@ -179,13 +208,13 @@ export default function LiveTrackerScreen({ route, navigation }) {
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
 
         ${safeOrigin && safeDest ? `
-          var status = "${status}";
-          var hasDriver = ${volunteerName ? 'true' : 'false'};
+          var status = "${currentStatus}";
+          var hasDriver = ${currentVolunteerName ? 'true' : 'false'};
           var userRole = "${user?.role || 'donor'}";
           var isSelfDelivery = status === 'self_delivery_active';
 
-          var resLoc = [${safeOrigin.latitude}, ${safeOrigin.longitude}];
-          var ngoLoc = [${safeDest.latitude}, ${safeDest.longitude}];
+          var resLoc = [${restaurantLocation.latitude}, ${restaurantLocation.longitude}];
+          var ngoLoc = [${ngoLocation.latitude}, ${ngoLocation.longitude}];
           
           var realDriverLat = ${driverLocation?.latitude || 'null'};
           var realDriverLng = ${driverLocation?.longitude || 'null'};
@@ -206,18 +235,14 @@ export default function LiveTrackerScreen({ route, navigation }) {
               else driverPos = ngoLoc;
           }
 
-          if (userRole === 'donor' && hasDriver && !isSelfDelivery) {
-              // RESTAURANT tracking VOLUNTEER
-              // Show route from Driver to Restaurant
+          var isPickupPhase = (status === 'approved' || status === 'driver_reached');
+
+          if (hasDriver && !isSelfDelivery) {
+              // Track volunteer driver
               p1 = driverPos;
-              p2 = resLoc;
-              showNgoMarker = false; // Hide NGO marker
-          } else if (userRole === 'user' && hasDriver && !isSelfDelivery) {
-              // NGO tracking VOLUNTEER
-              // Show route from Driver to NGO
-              p1 = driverPos;
-              p2 = ngoLoc;
-              showResMarker = false; // Hide Restaurant marker
+              p2 = isPickupPhase ? resLoc : ngoLoc;
+              showResMarker = true;
+              showNgoMarker = true;
           } else {
               // VOLUNTEER or SELF-DELIVERY
               // Show full route from Restaurant to NGO
@@ -317,10 +342,10 @@ export default function LiveTrackerScreen({ route, navigation }) {
             {/* Delivery Destination Status */}
             <View style={styles.sheetHeader}>
               <Text variant="labelLarge" style={{ color: theme.colors.secondary }}>
-                {!volunteerName || status === 'approved' ? 'Picking up at' : 'Delivering to'}
+                {isPickupPhase ? 'Picking up at' : 'Delivering to'}
               </Text>
               <Text variant="titleMedium" style={styles.targetName}>
-                {!volunteerName || status === 'approved' ? restaurantName : ngoName}
+                {isPickupPhase ? restaurantName : ngoName}
               </Text>
             </View>
 
@@ -333,28 +358,28 @@ export default function LiveTrackerScreen({ route, navigation }) {
                 <View style={styles.profileText}>
                   <Text style={styles.cardTitle}>{restaurantName}</Text>
                   <Text style={styles.cardSubtitle}>
-                    {status === 'approved' ? 'Preparing food' : status === 'driver_reached' ? 'Handing over food' : 'Food dispatched'}
+                    {currentStatus === 'approved' ? 'Preparing food' : currentStatus === 'driver_reached' ? 'Handing over food' : 'Food dispatched'}
                   </Text>
                 </View>
               </View>
 
               {/* Dynamic Right Profile (Driver / NGO) */}
-              {status !== 'self_delivery_active' && (
+              {currentStatus !== 'self_delivery_active' && (
                 <View style={styles.profileCard}>
                   <Avatar.Icon 
                     size={40} 
-                    icon={!volunteerName ? "account-search" : "motorbike"} 
-                    style={{ backgroundColor: !volunteerName ? 'rgba(255,255,255,0.1)' : 'rgba(204, 255, 0, 0.2)' }} 
+                    icon={!currentVolunteerName ? "account-search" : "motorbike"} 
+                    style={{ backgroundColor: !currentVolunteerName ? 'rgba(255,255,255,0.1)' : 'rgba(204, 255, 0, 0.2)' }} 
                     color={theme.colors.secondary} 
                   />
                   <View style={styles.profileText}>
                     <Text style={styles.cardTitle}>
-                      {!volunteerName ? "Driver: Not Assigned" : volunteerName}
+                      {!currentVolunteerName ? "Driver: Not Assigned" : currentVolunteerName}
                     </Text>
                     <Text style={styles.cardSubtitle}>
-                      {!volunteerName ? 'Waiting for volunteer' 
-                       : status === 'approved' ? 'On the way to pickup' 
-                       : status === 'driver_reached' ? 'At restaurant' 
+                      {!currentVolunteerName ? 'Waiting for volunteer' 
+                       : currentStatus === 'approved' ? 'On the way to pickup' 
+                       : currentStatus === 'driver_reached' ? 'At restaurant' 
                        : 'On the way to dropoff'}
                     </Text>
                   </View>
@@ -390,7 +415,7 @@ export default function LiveTrackerScreen({ route, navigation }) {
                 </TouchableOpacity>
 
                 {/* 2. Status Update Button */}
-                {status !== 'delivered' && (
+                {currentStatus !== 'delivered' && (
                   <TouchableOpacity 
                     style={[styles.statusButton, updating && { opacity: 0.7 }]}
                     disabled={updating}
@@ -418,6 +443,36 @@ export default function LiveTrackerScreen({ route, navigation }) {
                   </TouchableOpacity>
                 )}
                 
+              </View>
+            )}
+
+            {/* NGO Action Buttons */}
+            {user?.role === 'ngo' && currentStatus === 'picked_up' && (
+              <View style={styles.actionBlock}>
+                <TouchableOpacity 
+                  style={[styles.statusButton, updating && { opacity: 0.7 }]}
+                  disabled={updating}
+                  onPress={async () => {
+                    if (!requestId) return;
+                    try {
+                      setUpdating(true);
+                      await client.put(`/requests/${requestId}/status`, { status: 'delivered' });
+                      Alert.alert('Success', 'Order marked as Delivered & Received!');
+                      navigation.goBack();
+                    } catch (err) {
+                      Alert.alert('Error', 'Failed to confirm receipt.');
+                    } finally {
+                      setUpdating(false);
+                    }
+                  }}
+                >
+                  {updating ? <ActivityIndicator size="small" color={C.black} /> : (
+                    <>
+                      <Icon name="check-decagram" size={20} color={C.black} />
+                      <Text style={styles.statusBtnText}>Confirm Received</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
               </View>
             )}
 

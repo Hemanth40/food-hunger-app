@@ -249,7 +249,11 @@ async def get_my_driver_jobs(db: AsyncSession, user_id: int) -> List[RequestResp
         query.where(
             and_(
                 DonationRequest.assigned_driver_id == user_id,
-                DonationRequest.status.in_([RequestStatus.APPROVED, RequestStatus.PICKED_UP]),
+                DonationRequest.status.in_([
+                    RequestStatus.APPROVED,
+                    RequestStatus.DRIVER_REACHED,
+                    RequestStatus.PICKED_UP,
+                ]),
             )
         ).order_by(DonationRequest.claimed_at.desc())
     )
@@ -336,4 +340,16 @@ async def get_driver_location(
     if not claim or claim.driver_latitude is None:
         return None
     return {"latitude": claim.driver_latitude, "longitude": claim.driver_longitude}
+
+
+async def get_claim(
+    db: AsyncSession,
+    request_id: int,
+) -> Optional[RequestResponse]:
+    """Retrieve details for a single claim/request by ID."""
+    context = await _get_claim_context(db, request_id)
+    if not context:
+        return None
+    return _build_request_response(*context)
+
 
