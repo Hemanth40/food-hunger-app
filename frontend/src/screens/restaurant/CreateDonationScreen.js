@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, Alert,
   ScrollView, KeyboardAvoidingView, Platform, Image, StyleSheet,
@@ -6,6 +6,7 @@ import {
 import { AuthContext } from '../../context/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from '@expo/vector-icons/MaterialCommunityIcons';
+import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import client from '../../api/client';
@@ -48,6 +49,19 @@ export default function CreateDonationScreen({ navigation }) {
       }
     }
   }, [user]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (user) {
+        if (user.address && !pickupAddress) {
+          setPickupAddress(user.address);
+        }
+        if (typeof user.latitude === 'number' && typeof user.longitude === 'number' && !location) {
+          setLocation({ latitude: user.latitude, longitude: user.longitude });
+        }
+      }
+    }, [user, pickupAddress, location])
+  );
 
   const pickImage = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -148,8 +162,12 @@ export default function CreateDonationScreen({ navigation }) {
       setDescription('');
       setImageBase64(null);
       setImageUri(null);
-      setPickupAddress('');
-      setLocation(null);
+      setPickupAddress(user?.address || '');
+      setLocation(
+        typeof user?.latitude === 'number' && typeof user?.longitude === 'number'
+          ? { latitude: user.latitude, longitude: user.longitude }
+          : null
+      );
       
       navigation.goBack();
     } catch (err) {
