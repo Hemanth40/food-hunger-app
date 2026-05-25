@@ -35,13 +35,17 @@ class Settings(BaseSettings):
     DEV_MODE: bool = False
     DEV_OTP: str = "123456"
 
+    # TextBee.dev Integration
+    TEXTBEE_API_KEY: str = ""
+    TEXTBEE_DEVICE_ID: str = ""
+
     # Twilio Verify (kept as fallback)
     TWILIO_ACCOUNT_SID: str = ""
     TWILIO_AUTH_TOKEN: str = ""
     TWILIO_VERIFY_SERVICE_SID: str = ""
 
     # Firebase Phone Auth
-    USE_FIREBASE_AUTH: bool = True
+    USE_FIREBASE_AUTH: bool = False
     FIREBASE_SERVICE_ACCOUNT_JSON: str = ""
 
     HOST: str = "0.0.0.0"

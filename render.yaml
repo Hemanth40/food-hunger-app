@@ -33,12 +33,16 @@ services:
       - key: REDIS_URL
         sync: false   # Set manually in Render dashboard
 
-      # Fast2SMS — set manually in Render dashboard
-      - key: FAST2SMS_API_KEY
+      # TextBee.dev — set manually in Render dashboard
+      - key: TEXTBEE_API_KEY
+        sync: false
+      - key: TEXTBEE_DEVICE_ID
         sync: false
 
       # App Settings
       - key: DEV_MODE
+        value: "false"
+      - key: USE_FIREBASE_AUTH
         value: "false"
       - key: DEBUG
         value: "false"

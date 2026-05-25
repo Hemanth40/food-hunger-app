@@ -13,12 +13,54 @@ def _twilio_client() -> Client:
 
 async def send_otp_sms(phone: str, otp: str = None) -> bool:
     """
-    Send OTP via Twilio Verify to an Indian mobile number.
-    phone: 10-digit Indian number (e.g. '9876543210')
-    otp parameter is ignored — Twilio generates and sends the OTP.
-    Returns True if sent successfully, False otherwise.
+    Send OTP via TextBee or Twilio.
+    phone: 10-digit Indian number or E.164 format.
     """
-    # Ensure E.164 format for India
+    # Prioritize TextBee.dev if credentials are configured
+    if settings.TEXTBEE_API_KEY and settings.TEXTBEE_DEVICE_ID:
+        from app.core.security import generate_otp
+        from app.core.redis import store_otp
+
+        if not otp:
+            otp = generate_otp()
+
+        # Store the generated OTP in Redis with expiry
+        await store_otp(phone, otp)
+
+        # Ensure E.164 format for India (+91...)
+        clean_phone = phone.strip()
+        if not clean_phone.startswith("+"):
+            if clean_phone.startswith("91") and len(clean_phone) == 12:
+                clean_phone = f"+{clean_phone}"
+            else:
+                clean_phone = f"+91{clean_phone}"
+
+        import httpx
+        url = f"https://api.textbee.dev/api/v1/gateway/devices/{settings.TEXTBEE_DEVICE_ID}/send-sms"
+        headers = {
+            "x-api-key": settings.TEXTBEE_API_KEY,
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "recipients": [clean_phone],
+            "message": f"Your Food Hunger App verification code is: {otp}. Valid for 5 minutes."
+        }
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, json=payload, headers=headers, timeout=10.0)
+                res_data = response.json()
+                if response.status_code in (200, 201):
+                    print(f"[SMS] TextBee OTP sent successfully to {clean_phone}")
+                    return True
+                else:
+                    print(f"[SMS] TextBee API error {response.status_code}: {res_data}")
+                    return False
+        except Exception as e:
+            print(f"[SMS] TextBee request failed: {e}")
+            return False
+
+    # Ensure E.164 format for India fallback
     clean_phone = phone.strip()
     if not clean_phone.startswith("+"):
         if clean_phone.startswith("91") and len(clean_phone) == 12:

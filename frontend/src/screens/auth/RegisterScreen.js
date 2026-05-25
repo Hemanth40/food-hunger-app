@@ -33,16 +33,22 @@ export default function RegisterScreen({ navigation }) {
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [address, setAddress]   = useState('');
   const [showPwd, setShowPwd]   = useState(false);
+  const [otpHint, setOtpHint]   = useState(null);
 
   const submit = async () => {
     try {
       setLoading(true); setError('');
-      await register({
+      const res = await register({
         full_name: fullName, phone, password, role,
         latitude: selectedLocation?.latitude,
         longitude: selectedLocation?.longitude,
         address: address || undefined,
       });
+      if (res && res.otp_hint) {
+        setOtpHint(res.otp_hint);
+      } else {
+        setOtpHint(null);
+      }
       setStep('otp');
     } catch (err) {
       setError(extractError(err, 'Could not create account'));
@@ -79,13 +85,21 @@ export default function RegisterScreen({ navigation }) {
               </Text>
             </View>
 
-            <View style={styles.devBanner}>
-              <Icon name="shield-check-outline" size={16} color="#1D4ED8" />
-              <Text style={styles.devText}>
-                Enter <Text style={{ fontWeight: '900' }}>123456</Text> to verify your account
-              </Text>
-            </View>
-
+            {otpHint ? (
+              <View style={styles.devBanner}>
+                <Icon name="shield-check-outline" size={16} color="#1D4ED8" />
+                <Text style={styles.devText}>
+                  Dev Mode: Enter <Text style={{ fontWeight: '900' }}>{otpHint}</Text> to verify your account
+                </Text>
+              </View>
+            ) : (
+              <View style={[styles.devBanner, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
+                <Icon name="check-circle-outline" size={16} color="#15803D" />
+                <Text style={[styles.devText, { color: '#15803D' }]}>
+                  A verification code has been sent to your registered phone number.
+                </Text>
+              </View>
+            )}
             <Field label="OTP Code" icon="numeric"
               placeholder="Enter verification code"
               keyboardType="number-pad"

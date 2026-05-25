@@ -98,11 +98,23 @@ async def login_user(db: AsyncSession, data: UserLogin) -> TokenResponse:
 
 
 async def verify_otp_and_login(db: AsyncSession, phone: str, firebase_id_token: str) -> TokenResponse:
-    """Verify Firebase Phone Auth token (or DEV_OTP), activate account, return JWT."""
+    """Verify Firebase Phone Auth token (or DEV_OTP / Redis / Twilio), activate account, return JWT."""
     if settings.DEV_MODE:
         # Dev mode: firebase_id_token is treated as the raw OTP code
         if firebase_id_token != settings.DEV_OTP:
             raise ValueError(f"Invalid OTP. Dev mode: use '{settings.DEV_OTP}'")
+    elif not settings.USE_FIREBASE_AUTH:
+        # Custom backend OTP mode (TextBee with Redis, or Twilio Verify)
+        if settings.TEXTBEE_API_KEY and settings.TEXTBEE_DEVICE_ID:
+            from app.core.redis import verify_otp_from_store
+            is_valid = await verify_otp_from_store(phone, firebase_id_token)
+            if not is_valid:
+                raise ValueError("Invalid or expired verification code")
+        else:
+            # Twilio Verify
+            is_valid = await verify_otp_via_twilio(phone, firebase_id_token)
+            if not is_valid:
+                raise ValueError("Invalid or expired verification code")
     else:
         # Firebase mode: verify the ID token from Firebase Phone Auth
         from app.services.firebase_service import verify_firebase_id_token
