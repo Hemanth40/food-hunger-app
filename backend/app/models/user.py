@@ -39,7 +39,7 @@ class User(Base):
     donations = relationship("Donation", back_populates="donor", lazy="selectin")
     donation_requests = relationship("DonationRequest", back_populates="receiver", lazy="selectin")
     notifications = relationship("Notification", back_populates="user", lazy="selectin")
-    volunteer_profile = relationship("Volunteer", back_populates="user", uselist=False, lazy="selectin")
+    volunteer_profile = relationship("Volunteer", back_populates="user", uselist=False, lazy="selectin", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User {self.id}: {self.full_name} ({self.role.value})>"
