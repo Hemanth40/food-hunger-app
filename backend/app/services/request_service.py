@@ -217,7 +217,6 @@ async def get_donor_dispatches(db: AsyncSession, donor_id: int) -> List[RequestR
                     RequestStatus.APPROVED,
                     RequestStatus.DRIVER_REACHED,
                     RequestStatus.PICKED_UP,
-                    RequestStatus.DELIVERED,
                 ]),
             )
         ).order_by(DonationRequest.claimed_at.desc())
