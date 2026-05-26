@@ -97,6 +97,19 @@ export default function LiveTrackerScreen({ route, navigation }) {
     return () => clearInterval(interval);
   }, [user?.role, requestId, currentLocation]);
 
+  // --- VOLUNTEER: Update Leaflet Webview live marker position as driver moves ---
+  useEffect(() => {
+    if (user?.role !== 'volunteer' || !currentLocation) return;
+    if (webRef.current) {
+      webRef.current.injectJavaScript(`
+        if (window.driverMarker) {
+          window.driverMarker.setLatLng([${currentLocation.latitude}, ${currentLocation.longitude}]);
+        }
+        true;
+      `);
+    }
+  }, [user?.role, currentLocation]);
+
   // --- RESTAURANT / NGO: Poll driver location every 10s and update map ---
   useEffect(() => {
     if (user?.role === 'volunteer' || !requestId) return;
@@ -234,15 +247,15 @@ export default function LiveTrackerScreen({ route, navigation }) {
 
         ${safeOrigin && safeDest ? `
           var status = "${currentStatus}";
-          var hasDriver = ${currentVolunteerName ? 'true' : 'false'};
+          var hasDriver = ${user?.role === 'volunteer' || currentVolunteerName ? 'true' : 'false'};
           var userRole = "${user?.role || 'donor'}";
           var isSelfDelivery = status === 'self_delivery_active';
 
           var resLoc = [${restaurantLocation.latitude}, ${restaurantLocation.longitude}];
           var ngoLoc = [${ngoLocation.latitude}, ${ngoLocation.longitude}];
           
-          var realDriverLat = ${driverLocation?.latitude || 'null'};
-          var realDriverLng = ${driverLocation?.longitude || 'null'};
+          var realDriverLat = ${user?.role === 'volunteer' ? (currentLocation?.latitude || 'null') : (driverLocation?.latitude || 'null')};
+          var realDriverLng = ${user?.role === 'volunteer' ? (currentLocation?.longitude || 'null') : (driverLocation?.longitude || 'null')};
           var hasRealDriverLoc = realDriverLat !== null && realDriverLng !== null;
           
           // Determine the Start (p1) and End (p2) for the route
