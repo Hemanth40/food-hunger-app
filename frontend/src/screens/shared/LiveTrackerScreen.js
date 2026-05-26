@@ -99,7 +99,7 @@ export default function LiveTrackerScreen({ route, navigation }) {
 
   // --- RESTAURANT / NGO: Poll driver location every 10s and update map ---
   useEffect(() => {
-    if (user?.role === 'volunteer' || !requestId || !currentVolunteerName) return;
+    if (user?.role === 'volunteer' || !requestId) return;
     const pollDriverLocation = async () => {
       try {
         const res = await client.get(`/requests/${requestId}/driver-location`);
@@ -121,7 +121,7 @@ export default function LiveTrackerScreen({ route, navigation }) {
     pollDriverLocation();
     const interval = setInterval(pollDriverLocation, 10000);
     return () => clearInterval(interval);
-  }, [user?.role, requestId, currentVolunteerName]);
+  }, [user?.role, requestId]);
 
   // --- RESTAURANT / NGO: Poll request details every 10s to see if driver accepted or status changed ---
   useEffect(() => {

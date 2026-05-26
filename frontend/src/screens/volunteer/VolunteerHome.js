@@ -1,10 +1,11 @@
-import React, { useCallback, useContext, useState } from 'react';
+import React, { useCallback, useContext, useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity,
   ScrollView, RefreshControl, StyleSheet, StatusBar, Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from '@expo/vector-icons/MaterialCommunityIcons';
+import * as Location from 'expo-location';
 import { useFocusEffect } from '@react-navigation/native';
 import { AuthContext } from '../../context/AuthContext';
 import client from '../../api/client';
@@ -37,6 +38,56 @@ export default function VolunteerHome({ navigation }) {
   };
 
   const activeJob = myJobs[0];
+
+  // --- Continuous Live GPS Tracking when online with an active job ---
+  useEffect(() => {
+    if (!isOnline || !activeJob?.id) return;
+
+    let subscription = null;
+    const pushLocation = async (lat, lng) => {
+      try {
+        await client.put(`/requests/${activeJob.id}/driver-location`, {
+          latitude: lat,
+          longitude: lng,
+        });
+      } catch (_) {}
+    };
+
+    (async () => {
+      try {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          // Get initial location
+          try {
+            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            if (loc?.coords) {
+              pushLocation(loc.coords.latitude, loc.coords.longitude);
+            }
+          } catch (_) {}
+
+          // Watch position for updates
+          subscription = await Location.watchPositionAsync(
+            {
+              accuracy: Location.Accuracy.High,
+              timeInterval: 10000,    // every 10 seconds
+              distanceInterval: 10,   // every 10 meters
+            },
+            (updatedLoc) => {
+              if (updatedLoc?.coords) {
+                pushLocation(updatedLoc.coords.latitude, updatedLoc.coords.longitude);
+              }
+            }
+          );
+        }
+      } catch (_) {}
+    })();
+
+    return () => {
+      if (subscription) {
+        subscription.remove();
+      }
+    };
+  }, [isOnline, activeJob?.id]);
 
   return (
     <SafeAreaView style={styles.safe}>
