@@ -40,8 +40,14 @@ export default function DriverMarketplaceScreen() {
       client.get('/requests/driver/open'),
       client.get('/requests/driver/my'),
     ]);
-    if (openRes.status === 'fulfilled') setOpenJobs(toArr(openRes.value.data));
-    if (myRes.status === 'fulfilled') setMyJobs(toArr(myRes.value.data));
+    if (openRes.status === 'fulfilled') {
+      console.log("[DEBUG] Open Jobs payload:", JSON.stringify(openRes.value.data, null, 2));
+      setOpenJobs(toArr(openRes.value.data));
+    }
+    if (myRes.status === 'fulfilled') {
+      console.log("[DEBUG] My Jobs payload:", JSON.stringify(myRes.value.data, null, 2));
+      setMyJobs(toArr(myRes.value.data));
+    }
   };
 
   useFocusEffect(

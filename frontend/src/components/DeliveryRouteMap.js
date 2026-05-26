@@ -18,21 +18,42 @@ export default function DeliveryRouteMap({
   distanceKm,
   driverPos,
 }) {
-  const hasPickup  = pickupCoord?.latitude  && pickupCoord?.longitude;
-  const hasDropoff = dropoffCoord?.latitude && dropoffCoord?.longitude;
+  console.log("[DeliveryRouteMap Props]", {
+    pickupCoord,
+    dropoffCoord,
+    pickupAddress,
+    dropoffAddress,
+    foodType,
+    quantity
+  });
+  const hasPickupCoord = pickupCoord?.latitude != null && pickupCoord?.longitude != null;
+  const hasDropoffCoord = dropoffCoord?.latitude != null && dropoffCoord?.longitude != null;
+
+  const showPickup  = !!pickupAddress || hasPickupCoord;
+  const showDropoff = !!dropoffAddress || hasDropoffCoord;
+
+  const getCoordString = (coord) => {
+    if (!coord) return 'No coordinates';
+    const lat = typeof coord.latitude === 'number' ? coord.latitude : parseFloat(coord.latitude);
+    const lng = typeof coord.longitude === 'number' ? coord.longitude : parseFloat(coord.longitude);
+    if (!isNaN(lat) && !isNaN(lng)) {
+      return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    }
+    return 'No coordinates';
+  };
 
   const openPickup = () => {
-    if (!hasPickup) return;
+    if (!hasPickupCoord) return;
     Linking.openURL(`https://www.google.com/maps?q=${pickupCoord.latitude},${pickupCoord.longitude}`);
   };
 
   const openDropoff = () => {
-    if (!hasDropoff) return;
+    if (!hasDropoffCoord) return;
     Linking.openURL(`https://www.google.com/maps?q=${dropoffCoord.latitude},${dropoffCoord.longitude}`);
   };
 
   const openFullRoute = () => {
-    if (!hasPickup || !hasDropoff) return;
+    if (!hasPickupCoord || !hasDropoffCoord) return;
     const origin = driverPos?.latitude
       ? `${driverPos.latitude},${driverPos.longitude}`
       : `${pickupCoord.latitude},${pickupCoord.longitude}`;
@@ -46,27 +67,29 @@ export default function DeliveryRouteMap({
       {/* Route steps */}
       <View style={styles.routeWrap}>
         {/* Pickup */}
-        {hasPickup && (
+        {showPickup && (
           <View style={styles.step}>
             <View style={styles.stepLeft}>
               <View style={[styles.dot, { backgroundColor: C.green }]} />
-              {hasDropoff && <View style={styles.line} />}
+              {showDropoff && <View style={styles.line} />}
             </View>
             <View style={styles.stepBody}>
               <Text style={styles.stepLabel}>PICKUP</Text>
               <Text style={styles.stepAddr} numberOfLines={2}>
-                {pickupAddress || `${pickupCoord.latitude.toFixed(5)}, ${pickupCoord.longitude.toFixed(5)}`}
+                {pickupAddress || getCoordString(pickupCoord)}
               </Text>
-              <TouchableOpacity style={styles.miniBtn} onPress={openPickup}>
-                <Icon name="map-marker-outline" size={12} color="#2563EB" />
-                <Text style={styles.miniBtnText}>View on map</Text>
-              </TouchableOpacity>
+              {hasPickupCoord && (
+                <TouchableOpacity style={styles.miniBtn} onPress={openPickup}>
+                  <Icon name="map-marker-outline" size={12} color="#2563EB" />
+                  <Text style={styles.miniBtnText}>View on map</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         )}
 
         {/* Dropoff */}
-        {hasDropoff && (
+        {showDropoff && (
           <View style={styles.step}>
             <View style={styles.stepLeft}>
               <View style={[styles.dot, { backgroundColor: C.brand }]} />
@@ -74,12 +97,14 @@ export default function DeliveryRouteMap({
             <View style={styles.stepBody}>
               <Text style={styles.stepLabel}>DROPOFF</Text>
               <Text style={styles.stepAddr} numberOfLines={2}>
-                {dropoffAddress || `${dropoffCoord.latitude.toFixed(5)}, ${dropoffCoord.longitude.toFixed(5)}`}
+                {dropoffAddress || getCoordString(dropoffCoord)}
               </Text>
-              <TouchableOpacity style={styles.miniBtn} onPress={openDropoff}>
-                <Icon name="map-marker-outline" size={12} color="#2563EB" />
-                <Text style={styles.miniBtnText}>View on map</Text>
-              </TouchableOpacity>
+              {hasDropoffCoord && (
+                <TouchableOpacity style={styles.miniBtn} onPress={openDropoff}>
+                  <Icon name="map-marker-outline" size={12} color="#2563EB" />
+                  <Text style={styles.miniBtnText}>View on map</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         )}
@@ -108,7 +133,7 @@ export default function DeliveryRouteMap({
       </View>
 
       {/* Navigate CTA */}
-      {(hasPickup || hasDropoff) && (
+      {(hasPickupCoord && hasDropoffCoord) && (
         <TouchableOpacity style={styles.navBtn} onPress={openFullRoute}>
           <Icon name="navigation" size={18} color="#fff" />
           <Text style={styles.navBtnText}>Open Full Route in Google Maps</Text>
