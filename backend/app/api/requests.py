@@ -151,5 +151,5 @@ async def get_driver_location(
     """Polled by restaurant/NGO to get driver's current GPS coordinates."""
     loc = await request_service.get_driver_location(db, request_id)
     if loc is None:
-        raise HTTPException(status_code=404, detail="Driver location not available yet")
+        return {"latitude": None, "longitude": None}
     return loc
