@@ -3,7 +3,7 @@ Food Hunger App core configuration.
 Loads settings from environment variables via pydantic-settings.
 """
 
-from typing import List
+from typing import List, Optional
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings
@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     # TextBee.dev Integration
     TEXTBEE_API_KEY: str = ""
     TEXTBEE_DEVICE_ID: str = ""
+    TEXTBEE_SIM_SUB_ID: Optional[int] = None
 
     # Twilio Verify (kept as fallback)
     TWILIO_ACCOUNT_SID: str = ""

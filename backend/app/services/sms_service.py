@@ -45,6 +45,8 @@ async def send_otp_sms(phone: str, otp: str = None) -> bool:
             "recipients": [clean_phone],
             "message": f"Your Food Hunger App verification code is: {otp}. Valid for 5 minutes."
         }
+        if settings.TEXTBEE_SIM_SUB_ID is not None:
+            payload["simSubscriptionId"] = settings.TEXTBEE_SIM_SUB_ID
 
         try:
             async with httpx.AsyncClient() as client:
