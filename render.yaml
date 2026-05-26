@@ -33,14 +33,6 @@ services:
       - key: REDIS_URL
         sync: false   # Set manually in Render dashboard
 
-      # TextBee.dev — set manually in Render dashboard
-      - key: TEXTBEE_API_KEY
-        sync: false
-      - key: TEXTBEE_DEVICE_ID
-        sync: false
-      - key: TEXTBEE_SIM_SUB_ID
-        sync: false
-
       # App Settings
       - key: DEV_MODE
         value: "false"
