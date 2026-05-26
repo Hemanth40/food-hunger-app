@@ -56,8 +56,8 @@ export default function MapScreen() {
 
   const openFullRoute = () => {
     if (!job) return;
-    const pick = `${job.pickup_latitude},${job.pickup_longitude}`;
-    const drop = `${job.dropoff_latitude},${job.dropoff_longitude}`;
+    const pick = `${job.donation_latitude},${job.donation_longitude}`;
+    const drop = `${job.receiver_latitude},${job.receiver_longitude}`;
     const orig = location ? `${location.latitude},${location.longitude}` : pick;
     Linking.openURL(`https://www.google.com/maps/dir/${orig}/${pick}/${drop}`);
   };
@@ -116,10 +116,10 @@ export default function MapScreen() {
             <View style={styles.stepLine} />
             <View style={styles.stepInfo}>
               <Text style={styles.stepLabel}>📦 PICKUP</Text>
-              <Text style={styles.stepAddress}>{job.pickup_address || 'Pickup Location'}</Text>
-              {job.pickup_latitude && (
+              <Text style={styles.stepAddress}>{job.donation_pickup_address || 'Pickup Location'}</Text>
+              {job.donation_latitude && (
                 <TouchableOpacity style={styles.directionsBtn}
-                  onPress={() => openGoogleMaps(job.pickup_latitude, job.pickup_longitude, 'Pickup')}>
+                  onPress={() => openGoogleMaps(job.donation_latitude, job.donation_longitude, 'Pickup')}>
                   <Icon name="directions" size={14} color="#2563EB" />
                   <Text style={styles.directionsBtnText}>Get Directions</Text>
                 </TouchableOpacity>
@@ -132,10 +132,10 @@ export default function MapScreen() {
             <View style={{ width: 2 }} />
             <View style={styles.stepInfo}>
               <Text style={styles.stepLabel}>🏠 DROPOFF</Text>
-              <Text style={styles.stepAddress}>{job.dropoff_address || 'Dropoff Location'}</Text>
-              {job.dropoff_latitude && (
+              <Text style={styles.stepAddress}>{job.receiver_address || 'Dropoff Location'}</Text>
+              {job.receiver_latitude && (
                 <TouchableOpacity style={styles.directionsBtn}
-                  onPress={() => openGoogleMaps(job.dropoff_latitude, job.dropoff_longitude, 'Dropoff')}>
+                  onPress={() => openGoogleMaps(job.receiver_latitude, job.receiver_longitude, 'Dropoff')}>
                   <Icon name="directions" size={14} color="#2563EB" />
                   <Text style={styles.directionsBtnText}>Get Directions</Text>
                 </TouchableOpacity>
@@ -153,17 +153,17 @@ export default function MapScreen() {
               <Text style={styles.infoLabel}>Distance</Text>
             </View>
           )}
-          {job.food_type && (
+          {job.donation_food_type && (
             <View style={styles.infoCard}>
               <Icon name="food-fork-drink" size={22} color={C.green} />
-              <Text style={styles.infoValue} numberOfLines={1}>{job.food_type}</Text>
+              <Text style={styles.infoValue} numberOfLines={1}>{job.donation_food_type}</Text>
               <Text style={styles.infoLabel}>Food Type</Text>
             </View>
           )}
-          {job.quantity && (
+          {job.donation_quantity && (
             <View style={styles.infoCard}>
               <Icon name="account-group" size={22} color="#7C3AED" />
-              <Text style={styles.infoValue}>{job.quantity}</Text>
+              <Text style={styles.infoValue}>{job.donation_quantity}</Text>
               <Text style={styles.infoLabel}>Servings</Text>
             </View>
           )}

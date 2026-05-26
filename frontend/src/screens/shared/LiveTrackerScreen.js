@@ -40,20 +40,45 @@ export default function LiveTrackerScreen({ route, navigation }) {
     return () => clearTimeout(t);
   }, []);
 
-  // --- Get current device location ---
+  // --- Get current device location & watch position ---
   useEffect(() => {
+    let subscription = null;
     (async () => {
       let { status: permStatus } = await Location.requestForegroundPermissionsAsync();
       if (permStatus === 'granted') {
-        let loc = await Location.getCurrentPositionAsync({});
-        setCurrentLocation({
-          latitude: loc.coords.latitude,
-          longitude: loc.coords.longitude,
-        });
+        try {
+          let loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          setCurrentLocation({
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+          });
+        } catch (_) {}
+
+        subscription = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.High,
+            timeInterval: 5000,     // every 5 seconds
+            distanceInterval: 10,   // every 10 meters
+          },
+          (loc) => {
+            if (loc?.coords) {
+              setCurrentLocation({
+                latitude: loc.coords.latitude,
+                longitude: loc.coords.longitude,
+              });
+            }
+          }
+        );
       } else {
         setCurrentLocation(restaurantLocation);
       }
     })();
+
+    return () => {
+      if (subscription) {
+        subscription.remove();
+      }
+    };
   }, []);
 
   // --- VOLUNTEER: Push GPS to backend every 10s ---

@@ -173,6 +173,9 @@ async def update_claim_status(
         claim.status = RequestStatus.DELIVERED
         donation.status = DonationStatus.DELIVERED
         claim.completed_at = datetime.now(timezone.utc)
+        if claim.delivery_mode == "driver" and claim.assigned_driver_id:
+            from app.services.volunteer_service import increment_deliveries
+            await increment_deliveries(db, claim.assigned_driver_id)
     elif target_status == RequestStatus.CANCELLED:
         if not (is_donor or is_receiver or is_driver):
             raise ValueError("You cannot cancel this claim")

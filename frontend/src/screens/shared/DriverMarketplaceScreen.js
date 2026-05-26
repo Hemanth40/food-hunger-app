@@ -113,21 +113,47 @@ export default function DriverMarketplaceScreen() {
             };
           }
 
+          const actionLabel = activeAction(item);
+
           return (
-          <DeliveryRouteMap
-            key={item.id}
-            pickup={mapPickup}
-            dropoff={mapDropoff}
-            title={item.donation_food_type}
-            subtitle={`${item.donor_name} to ${item.receiver_name}`}
-            statusTone={item.status}
-            statusLabel={item.status}
-            actionLabel={activeAction(item)}
-            onActionPress={() => updateJobStatus(item)}
-            compact
-            pickupLabel={item.donor_name || 'Pickup'}
-            dropoffLabel={item.receiver_name || 'NGO hub'}
-          />
+            <GlassCard key={item.id} style={styles.jobCard}>
+              <View style={styles.jobHeader}>
+                <View style={styles.jobCopy}>
+                  <Text style={styles.jobTitle}>{item.donation_food_type}</Text>
+                  <Text style={styles.jobSubtitle}>
+                    {item.donor_name} to {item.receiver_name}
+                  </Text>
+                </View>
+                <StatusChip tone="driver" label={item.status.replace('_', ' ')} />
+              </View>
+
+              <View style={styles.metaRow}>
+                <Icon name="map-marker-outline" size={18} color="#8E8E93" />
+                <Text style={styles.jobMeta}>{item.donation_pickup_address}</Text>
+              </View>
+
+              <DeliveryRouteMap
+                pickupCoord={mapPickup}
+                dropoffCoord={mapDropoff}
+                pickupAddress={item.donation_pickup_address}
+                dropoffAddress={item.receiver_address}
+                foodType={item.donation_food_type}
+                quantity={item.donation_quantity}
+                distanceKm={item.distance_km}
+              />
+              {actionLabel && (
+                <Button
+                  mode="contained"
+                  buttonColor="#1C1C1E"
+                  textColor="#FFFFFF"
+                  style={styles.acceptButton}
+                  contentStyle={styles.acceptButtonContent}
+                  onPress={() => updateJobStatus(item)}
+                >
+                  {actionLabel}
+                </Button>
+              )}
+            </GlassCard>
           );
         })
       ) : (
@@ -163,21 +189,18 @@ export default function DriverMarketplaceScreen() {
             </View>
 
             <DeliveryRouteMap
-              pickup={{
+              pickupCoord={{
                 latitude: item.donation_latitude,
                 longitude: item.donation_longitude,
               }}
-              dropoff={{
+              dropoffCoord={{
                 latitude: item.receiver_latitude,
                 longitude: item.receiver_longitude,
               }}
-              title="Dispatch preview"
-              subtitle={`${item.donor_name} pickup to NGO hub`}
-              statusTone="driver"
-              statusLabel={item.delivery_mode || 'driver'}
-              compact
-              pickupLabel={item.donor_name || 'Pickup'}
-              dropoffLabel={item.receiver_name || 'NGO hub'}
+              pickupAddress={item.donation_pickup_address}
+              dropoffAddress={item.receiver_address}
+              foodType={item.donation_food_type}
+              quantity={item.donation_quantity}
             />
             <Button
               mode="contained"
