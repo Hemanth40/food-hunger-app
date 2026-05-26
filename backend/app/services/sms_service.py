@@ -43,7 +43,7 @@ async def send_otp_sms(phone: str, otp: str = None) -> bool:
         }
         payload = {
             "recipients": [clean_phone],
-            "message": f"Your Food Hunger App verification code is: {otp}. Valid for 5 minutes."
+            "message": f"Food Hunger code: {otp}"
         }
         if settings.TEXTBEE_SIM_SUB_ID is not None:
             payload["simSubscriptionId"] = settings.TEXTBEE_SIM_SUB_ID
