@@ -71,6 +71,11 @@ export default function LiveTrackerScreen({ route, navigation }) {
         );
       } else {
         setCurrentLocation(restaurantLocation);
+        Alert.alert(
+          "Location Services Required",
+          "To accurately track your route and calculate the correct distance, please grant location access permissions in your phone settings.",
+          [{ text: "OK" }]
+        );
       }
     })();
 

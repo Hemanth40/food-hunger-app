@@ -89,6 +89,15 @@ export default function VolunteerHome({ navigation }) {
     };
   }, [isOnline, activeJob?.id]);
 
+  // --- Prompt for Location Permission on App Load ---
+  useEffect(() => {
+    (async () => {
+      try {
+        await Location.requestForegroundPermissionsAsync();
+      } catch (_) {}
+    })();
+  }, []);
+
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" />
