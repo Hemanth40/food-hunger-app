@@ -25,6 +25,10 @@ class Base(DeclarativeBase):
 
 
 DEV_SCHEMA_PATCHES = {
+    "users": {
+        "otp_code": "VARCHAR(10)",
+        "otp_expires_at": "TIMESTAMP",
+    },
     "donations": {
         "delivery_preference": "VARCHAR(20) NOT NULL DEFAULT 'flex'",
     },

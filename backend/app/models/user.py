@@ -4,7 +4,7 @@ User model — supports restaurant, user, ngo, volunteer roles.
 
 import enum
 from datetime import datetime, timezone
-from sqlalchemy import String, Float, DateTime, Enum, Text
+from sqlalchemy import String, Float, DateTime, Enum, Text, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
@@ -30,6 +30,8 @@ class User(Base):
     address: Mapped[str] = mapped_column(Text, nullable=True)
     avatar_url: Mapped[str] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(default=True)
+    otp_code: Mapped[str] = mapped_column(String(10), nullable=True)
+    otp_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

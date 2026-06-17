@@ -2,6 +2,7 @@
 Auth service for registration, login, OTP, and token management.
 """
 
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -66,8 +67,18 @@ async def register_user(db: AsyncSession, data: UserRegister) -> dict:
     if settings.USE_FIREBASE_AUTH or settings.DEV_MODE:
         mode = 'DEV' if settings.DEV_MODE else 'Firebase'
         print(f"[Auth] {mode} mode: backend skips OTP send, client handles it.")
+        if settings.DEV_MODE:
+            user.otp_code = settings.DEV_OTP
+            user.otp_expires_at = datetime.now(timezone.utc) + timedelta(seconds=settings.OTP_EXPIRE_SECONDS)
+            await db.flush()
     else:
-        await send_otp_sms(user.phone)
+        from app.core.security import generate_otp
+        otp_code = generate_otp()
+        user.otp_code = otp_code
+        user.otp_expires_at = datetime.now(timezone.utc) + timedelta(seconds=settings.OTP_EXPIRE_SECONDS)
+        await db.flush()
+        print(f"[Auth] OTP {otp_code} stored in DB for phone={data.phone}")
+        await send_otp_sms(user.phone, otp_code)
 
     return {
         "phone": user.phone,
@@ -99,6 +110,9 @@ async def login_user(db: AsyncSession, data: UserLogin) -> TokenResponse:
 
 async def verify_otp_and_login(db: AsyncSession, phone: str, firebase_id_token: str) -> TokenResponse:
     """Verify Firebase Phone Auth token (or DEV_OTP / Redis / Twilio), activate account, return JWT."""
+    print(f"[Auth] verify_otp_and_login called: phone={phone!r}, otp={firebase_id_token!r}")
+    print(f"[Auth] DEV_MODE={settings.DEV_MODE}, USE_FIREBASE={settings.USE_FIREBASE_AUTH}, "
+          f"TEXTBEE_KEY={'set' if settings.TEXTBEE_API_KEY else 'empty'}")
     if settings.DEV_MODE:
         # Dev mode: firebase_id_token is treated as the raw OTP code
         if firebase_id_token != settings.DEV_OTP:
@@ -108,6 +122,23 @@ async def verify_otp_and_login(db: AsyncSession, phone: str, firebase_id_token: 
         if settings.TEXTBEE_API_KEY and settings.TEXTBEE_DEVICE_ID:
             from app.core.redis import verify_otp_from_store
             is_valid = await verify_otp_from_store(phone, firebase_id_token)
+            if not is_valid:
+                # Fallback: check OTP stored in DB (survives Render free tier restarts)
+                print(f"[Auth] Redis OTP miss — trying DB fallback for phone={phone!r}")
+                result = await db.execute(select(User).where(User.phone == phone))
+                db_user = result.scalar_one_or_none()
+                if db_user and db_user.otp_code and db_user.otp_code == firebase_id_token:
+                    if db_user.otp_expires_at and db_user.otp_expires_at > datetime.now(timezone.utc):
+                        print(f"[Auth] ✅ DB fallback OTP matched for phone={phone!r}")
+                        db_user.otp_code = None
+                        db_user.otp_expires_at = None
+                        await db.flush()
+                        is_valid = True
+                    else:
+                        print(f"[Auth] ❌ DB OTP expired for phone={phone!r}")
+                else:
+                    print(f"[Auth] ❌ DB OTP not found or mismatch for phone={phone!r}, "
+                          f"db_otp={db_user.otp_code if db_user else 'no user'}, provided={firebase_id_token!r}")
             if not is_valid:
                 raise ValueError("Invalid or expired verification code")
         else:

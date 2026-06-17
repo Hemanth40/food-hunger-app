@@ -59,19 +59,31 @@ async def get_redis() -> redis.Redis:
 
 # ── OTP helpers ──
 
+def _normalize_phone(identifier: str) -> str:
+    """Normalize phone to last 10 digits for consistent OTP key."""
+    digits = "".join(c for c in identifier.strip() if c.isdigit())
+    return digits[-10:] if len(digits) >= 10 else digits
+
+
 async def store_otp(identifier: str, otp: str):
     """Store OTP in Redis with TTL."""
     r = await get_redis()
-    await r.setex(f"otp:{identifier}", settings.OTP_EXPIRE_SECONDS, otp)
+    key = f"otp:{_normalize_phone(identifier)}"
+    await r.setex(key, settings.OTP_EXPIRE_SECONDS, otp)
+    print(f"[OTP] Stored OTP for key={key}, otp={otp}")
 
 
 async def verify_otp_from_store(identifier: str, otp: str) -> bool:
     """Verify OTP and delete on success."""
     r = await get_redis()
-    stored = await r.get(f"otp:{identifier}")
+    key = f"otp:{_normalize_phone(identifier)}"
+    stored = await r.get(key)
+    print(f"[OTP] Verifying key={key}, provided={otp!r}, stored={stored!r}")
     if stored and stored == otp:
-        await r.delete(f"otp:{identifier}")
+        await r.delete(key)
+        print(f"[OTP] ✅ OTP verified and deleted for {key}")
         return True
+    print(f"[OTP] ❌ OTP mismatch or expired for {key}")
     return False
 
 
