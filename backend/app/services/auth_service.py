@@ -2,6 +2,7 @@
 Auth service for registration, login, OTP, and token management.
 """
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -80,9 +81,16 @@ async def register_user(db: AsyncSession, data: UserRegister) -> dict:
         user.otp_expires_at = datetime.now(timezone.utc) + timedelta(seconds=settings.OTP_EXPIRE_SECONDS)
         await db.flush()
         print(f"[Auth] OTP {otp_code} stored in DB for phone={data.phone}")
-        sms_sent = await send_otp_sms(user.phone, otp_code)
-        if not sms_sent:
-            print(f"[Auth] ⚠️ SMS failed — OTP {otp_code} is in DB, returning in response as fallback")
+
+        # Send SMS in background — registration returns instantly, SMS arrives in a few seconds
+        async def _send_sms_background(phone: str, otp: str):
+            sms_sent = await send_otp_sms(phone, otp)
+            if sms_sent:
+                print(f"[Auth] ✅ Background SMS sent to {phone}")
+            else:
+                print(f"[Auth] ⚠️ Background SMS failed for {phone} — OTP is still in DB")
+
+        asyncio.create_task(_send_sms_background(user.phone, otp_code))
 
     return {
         "phone": user.phone,

@@ -50,7 +50,7 @@ async def send_otp_sms(phone: str, otp: str = None) -> bool:
 
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.post(url, json=payload, headers=headers, timeout=10.0)
+                response = await client.post(url, json=payload, headers=headers, timeout=30.0)
                 res_data = response.json()
                 if response.status_code in (200, 201):
                     print(f"[SMS] TextBee OTP sent successfully to {clean_phone}")
