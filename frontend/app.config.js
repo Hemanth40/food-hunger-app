@@ -6,7 +6,6 @@ export default {
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": false,
     "updates": {
       "enabled": false,
       "checkAutomatically": "NEVER",
