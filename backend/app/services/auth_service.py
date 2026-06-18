@@ -64,10 +64,12 @@ async def register_user(db: AsyncSession, data: UserRegister) -> dict:
     await db.flush()
 
     # Firebase handles OTP client-side — no backend SMS needed
+    otp_code = None
     if settings.USE_FIREBASE_AUTH or settings.DEV_MODE:
         mode = 'DEV' if settings.DEV_MODE else 'Firebase'
         print(f"[Auth] {mode} mode: backend skips OTP send, client handles it.")
         if settings.DEV_MODE:
+            otp_code = settings.DEV_OTP
             user.otp_code = settings.DEV_OTP
             user.otp_expires_at = datetime.now(timezone.utc) + timedelta(seconds=settings.OTP_EXPIRE_SECONDS)
             await db.flush()
@@ -78,12 +80,14 @@ async def register_user(db: AsyncSession, data: UserRegister) -> dict:
         user.otp_expires_at = datetime.now(timezone.utc) + timedelta(seconds=settings.OTP_EXPIRE_SECONDS)
         await db.flush()
         print(f"[Auth] OTP {otp_code} stored in DB for phone={data.phone}")
-        await send_otp_sms(user.phone, otp_code)
+        sms_sent = await send_otp_sms(user.phone, otp_code)
+        if not sms_sent:
+            print(f"[Auth] ⚠️ SMS failed — OTP {otp_code} is in DB, returning in response as fallback")
 
     return {
         "phone": user.phone,
         "message": "OTP sent to your phone — enter it to activate your account",
-        "otp_hint": settings.DEV_OTP if settings.DEV_MODE else None,
+        "otp_hint": otp_code if settings.DEV_MODE else None,
     }
 
 
